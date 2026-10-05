@@ -15,7 +15,7 @@ A closed-book written check multiplies my grade: I have to explain my own code o
 - Before writing code, say in plain language what it will do and why.
 - Write at most about 40 new lines per step, then stop and walk me through them.
 - Keep the code plain: small functions, clear names, no clever abstractions, no classes unless they remove real duplication.
-- After each piece, ask me two or three questions about it (for example: "what does `check_outfit_changes` return when there is no problem?"). Correct my answers. Do not continue until I can answer.
+- After each piece, ask me two or three questions about it (for example: "what does `check_outfit_changes` return when there is no problem?"). Correct and explain wrong answers, then continue. No second round of recheck questions.
 - I have not used Flask before. Teach each Flask concept the first time it appears.
 - Only do the current day's scope. If I ask to jump ahead, remind me of the commit rules first.
 - Point out anything that breaks a constraint from the brief before I move on.
@@ -31,6 +31,7 @@ A closed-book written check multiplies my grade: I have to explain my own code o
 - Do not run `git commit` or `git push`. Give me the command and I run it.
 - Never backdate, change commit dates, rewrite history or fabricate commits. The brief treats that as an academic integrity violation.
 - Commit messages describe what changed and why. Never "Initial commit", "WIP", "update" or "fix".
+- No `Co-Authored-By` trailer in commit messages. AI use is disclosed in `AI_USAGE.md`.
 - I push at the end of every working day, because push timestamps are what gets checked.
 - Targets: 12+ commits, 6+ distinct calendar days, no day above 40% of all commits, ADR entries spread over 3+ commit dates.
 
@@ -159,7 +160,7 @@ Three commits per day. If a day is missed, shift the work, keep every day at 40%
 
 Update this section at the end of every session.
 
-- Idea approved by the professor: no, pitch not sent yet
-- Stack confirmed by Fer: no
-- Last finished: nothing, Day 1 not started
-- Commits so far: 0
+- Idea approved by the professor: yes (2026-10-05)
+- Stack confirmed by Fer: yes (Flask, sqlite3, waitress, pytest, pytest-cov)
+- Last finished: Day 1 (skeleton, ADR-1, AI usage log started)
+- Commits so far: 3 on 2026-10-05
