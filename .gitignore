@@ -1,0 +1,17 @@
+# Assignment brief stays out of the repo
+assignment_1.md
+
+# Virtual environment (rebuilt from requirements.txt)
+.venv/
+
+# Python bytecode
+__pycache__/
+*.pyc
+
+# SQLite database (default DATA_DIR)
+data/
+
+# Test and coverage output
+.pytest_cache/
+.coverage
+htmlcov/
