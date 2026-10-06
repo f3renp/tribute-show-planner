@@ -6,10 +6,12 @@ from flask import Flask
 from waitress import serve
 
 import config
+import db
 
 
 def create_app():
-    """Build and return the Flask app with its routes registered."""
+    """Create missing tables, then build and return the Flask app."""
+    db.init_db()
     app = Flask(__name__)
 
     @app.route("/")

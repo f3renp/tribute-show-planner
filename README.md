@@ -23,3 +23,6 @@ uv run python app.py
 
 The app listens on `0.0.0.0`, port `8000` by default. Set the `PORT`
 environment variable to change it.
+
+The SQLite database is stored at `DATA_DIR/tribute.db` (`data/tribute.db`
+by default). The folder and tables are created automatically at startup.
