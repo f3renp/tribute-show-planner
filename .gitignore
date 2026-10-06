@@ -1,6 +1,9 @@
 # Assignment brief stays out of the repo
 assignment_1.md
 
+# Local instructions for Claude Code, kept on my laptop only
+CLAUDE.md
+
 # Virtual environment (rebuilt from requirements.txt)
 .venv/
 
