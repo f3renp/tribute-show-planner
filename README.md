@@ -14,3 +14,12 @@ Requires [uv](https://docs.astral.sh/uv/).
 uv venv
 uv pip install -r requirements.txt
 ```
+
+## Run
+
+```
+uv run python app.py
+```
+
+The app listens on `0.0.0.0`, port `8000` by default. Set the `PORT`
+environment variable to change it.
