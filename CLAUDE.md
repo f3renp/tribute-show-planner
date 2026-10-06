@@ -164,5 +164,6 @@ Update this section at the end of every session.
 
 - Idea approved by the professor: yes (2026-10-05)
 - Stack confirmed by Fer: yes (Flask, sqlite3, waitress, pytest, pytest-cov)
-- Last finished: Day 1 (skeleton, ADR-1, AI usage log started)
-- Commits so far: 3 on 2026-10-05
+- Last finished: Day 2 (config, schema created on startup, ADR-2)
+- Commits so far: 3 on 2026-10-05, 5 on 2026-10-06 (the second schema commit, 19d1331, only holds an AI_USAGE.md wording fix)
+- Next: Day 3, catalogue (validation and duration parsing, catalogue pages, unit tests)
