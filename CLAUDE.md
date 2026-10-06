@@ -11,13 +11,13 @@ Individual Assignment 1 for Software and DevOps (IE University). The full brief 
 
 A closed-book written check multiplies my grade: I have to explain my own code on paper, with no notes. Code I don't understand costs me marks, so understanding matters more than speed.
 
-- Go one small step at a time and wait for my confirmation before the next one.
-- Before writing code, say in plain language what it will do and why.
-- Write at most about 40 new lines per step, then stop and walk me through them.
+- Work one commit at a time. Write each commit's worth of code in one go: no stopping every 40 lines, no quiz questions.
+- When the piece is finished, give me one short explanation: what each new file does, the main functions by name, and how they connect.
+- Then wait while I write my "In my own words" row for it in `AI_USAGE.md`. Check that row against the code and tell me what is vague or wrong. Only move to the next commit after that.
 - Keep the code plain: small functions, clear names, no clever abstractions, no classes unless they remove real duplication.
-- After each piece, ask me two or three questions about it (for example: "what does `check_outfit_changes` return when there is no problem?"). Correct and explain wrong answers, then continue. No second round of recheck questions.
-- I have not used Flask before. Teach each Flask concept the first time it appears.
+- I have not used Flask before. Explain each Flask concept the first time it appears, inside that short explanation.
 - Only do the current day's scope. If I ask to jump ahead, remind me of the commit rules first.
+- I run every git command myself (see Git rules).
 - Point out anything that breaks a constraint from the brief before I move on.
 
 ## Things only I write
@@ -109,7 +109,9 @@ requirements.txt  pytest.ini  README.md  ADR.md  AI_USAGE.md  .gitignore  CLAUDE
 
 ## Plan
 
-Three commits per day. If a day is missed, shift the work, keep every day at 40% of commits or less, and still reach 6 distinct days by 12 Oct.
+Target finish: Sun 11 Oct. Real deadline: Mon 12 Oct 23:59, kept as an emergency buffer only.
+
+21 planned commits over 7 days (3 per day, 4 on Saturday, 2 on Sunday). The largest day is 4/21 = 19%. If a day is missed, spread its work over the following days instead of doubling up, keep every day at 40% of commits or less, and still reach 6 distinct days by 12 Oct.
 
 **Day 1, Mon 5 Oct: pitch and setup.** No feature code before the professor approves the idea.
 - I send the pitch below. `git init`, create the empty GitHub repo, add the remote.
@@ -141,16 +143,16 @@ Three commits per day. If a day is missed, shift the work, keep every day at 40%
 - Add service tests using a temporary SQLite database
 - Seed the demo catalogue when the database is empty
 - Record ADR-4: test rules and services first, keep routes thin
-
-**Day 7, Sun 11 Oct: documentation and report.**
-- Record ADR-5: no login in this version
 - Document setup, environment variables and coverage result in README
-- Add architecture and database diagrams matching the code
 
-**Day 8, Mon 12 Oct: buffer and submission.**
-- Clone into a fresh folder and run from zero to prove the README works.
-- Finish the 4-5 page report (SDLC model, both diagrams, AI disclosure statement).
+**Day 7, Sun 11 Oct: documentation, report and submission (target finish).**
+- Record ADR-5: no login in this version
+- Add architecture and database diagrams matching the code
+- No commit needed: clone into a fresh folder and run from zero to prove the README works.
+- No commit needed: finish the 4-5 page report (SDLC model, both diagrams, AI disclosure statement). Draft the SDLC section earlier in the week.
 - Check `ADR.md` has exactly 5 entries, then submit.
+
+**Mon 12 Oct: emergency buffer only.** Use it only if something slipped. The real deadline is 23:59.
 
 ## Pitch for the professor
 
