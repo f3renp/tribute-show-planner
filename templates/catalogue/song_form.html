@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+
+{% block title %}{{ heading }}{% endblock %}
+
+{% block content %}
+<h1>{{ heading }}</h1>
+
+{% if not outfits %}
+<p>Add an <a href="{{ url_for('catalogue.outfit_list') }}">outfit</a> first: every song needs one.</p>
+{% else %}
+<form method="post" class="stacked">
+  <label>Title <input name="title" value="{{ form.title }}"></label>
+  <label>Album <input name="album" value="{{ form.album }}"></label>
+  <label>Year <input name="year" value="{{ form.year }}"></label>
+  <label>Duration (m:ss) <input name="duration" value="{{ form.duration }}" placeholder="4:54"></label>
+  <label>Energy
+    <select name="energy">
+      {% for level in range(1, 6) %}
+      <option value="{{ level }}" {% if form.energy == level|string %}selected{% endif %}>{{ level }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Kind
+    <select name="kind">
+      {% for kind in ['dance', 'ballad'] %}
+      <option value="{{ kind }}" {% if form.kind == kind %}selected{% endif %}>{{ kind }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Outfit
+    <select name="outfit_id">
+      {% for outfit in outfits %}
+      <option value="{{ outfit.id }}" {% if form.outfit_id == outfit.id|string %}selected{% endif %}>{{ outfit.name }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <button>Save</button>
+  <a href="{{ url_for('catalogue.song_list') }}">Cancel</a>
+</form>
+{% endif %}
+{% endblock %}

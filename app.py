@@ -2,21 +2,23 @@
 
 Start it with: uv run python app.py
 """
-from flask import Flask
+from flask import Flask, redirect, url_for
 from waitress import serve
 
 import config
 import db
+from catalogue.routes import bp as catalogue_bp
 
 
 def create_app():
     """Create missing tables, then build and return the Flask app."""
     db.init_db()
     app = Flask(__name__)
+    app.register_blueprint(catalogue_bp)
 
     @app.route("/")
     def home():
-        return "Tribute Show Planner is running."
+        return redirect(url_for("catalogue.song_list"))
 
     return app
 

@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+
+{% block title %}Songs{% endblock %}
+
+{% block content %}
+<h1>Songs</h1>
+<p><a href="{{ url_for('catalogue.new_song') }}">Add a song</a></p>
+
+{% if songs %}
+<table>
+  <thead>
+    <tr>
+      <th>Title</th><th>Album</th><th>Year</th><th>Duration</th>
+      <th>Energy</th><th>Kind</th><th>Outfit</th><th>Status</th><th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for song in songs %}
+    <tr class="{{ '' if song.active else 'retired' }}">
+      <td>{{ song.title }}</td>
+      <td>{{ song.album }}</td>
+      <td>{{ song.year }}</td>
+      <td>{{ format_duration(song.duration_seconds) }}</td>
+      <td>{{ song.energy }}</td>
+      <td>{{ song.kind }}</td>
+      <td>{{ song.outfit_name }}</td>
+      <td>{{ 'Active' if song.active else 'Retired' }}</td>
+      <td class="actions">
+        <a href="{{ url_for('catalogue.edit_song', song_id=song.id) }}">Edit</a>
+        {% if song.active %}
+        <form method="post" action="{{ url_for('catalogue.retire', song_id=song.id) }}">
+          <button>Retire</button>
+        </form>
+        {% else %}
+        <form method="post" action="{{ url_for('catalogue.reactivate', song_id=song.id) }}">
+          <button>Reactivate</button>
+        </form>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p>No songs yet.</p>
+{% endif %}
+{% endblock %}

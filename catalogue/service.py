@@ -1,8 +1,11 @@
-"""Catalogue rules: duration parsing and validation of songs and outfits.
+"""Catalogue rules: duration parsing, validation, and saving songs and outfits.
 
-These functions take plain values and return plain values. They do not
-touch the database or Flask, so they can be unit tested on their own.
+The parsing and validate_* functions take plain values and return plain
+values, with no database or Flask, so they can be unit tested on their own.
+The functions at the bottom (add_song, edit_song, ...) run those checks,
+add the checks that need the database, and save through the repository.
 """
+from catalogue import repository
 
 # First Jackson 5 recordings to the last posthumous album (Xscape).
 MIN_YEAR = 1964
@@ -126,3 +129,74 @@ def validate_outfit(form):
 
     outfit = {"name": name, "change_seconds": change_seconds}
     return outfit, errors
+
+
+def song_to_form(song):
+    """Turn a saved song back into form strings, to fill the edit form."""
+    return {
+        "title": song["title"],
+        "album": song["album"],
+        "year": str(song["year"]),
+        "duration": format_duration(song["duration_seconds"]),
+        "energy": str(song["energy"]),
+        "kind": song["kind"],
+        "outfit_id": str(song["outfit_id"]),
+    }
+
+
+# Saving: these use the database through the repository ------------------
+
+
+def check_song_against_catalogue(song, song_id=None):
+    """Checks that need the database: the outfit exists, no duplicate song.
+
+    song_id is the song being edited, so it is not reported as a
+    duplicate of itself. It is None when adding a new song.
+    """
+    errors = []
+    if repository.get_outfit(song["outfit_id"]) is None:
+        errors.append("That outfit does not exist.")
+    existing = repository.find_song_by_title_and_album(song["title"], song["album"])
+    if existing is not None and existing["id"] != song_id:
+        errors.append("This title and album is already in the catalogue.")
+    return errors
+
+
+def add_song(form):
+    """Validate a new song form and save it. Return the errors, empty if saved."""
+    song, errors = validate_song(form)
+    if not errors:
+        errors = check_song_against_catalogue(song)
+    if not errors:
+        repository.insert_song(song)
+    return errors
+
+
+def edit_song(song_id, form):
+    """Validate an edited song form and save it. Return the errors, empty if saved."""
+    song, errors = validate_song(form)
+    if not errors:
+        errors = check_song_against_catalogue(song, song_id)
+    if not errors:
+        repository.update_song(song_id, song)
+    return errors
+
+
+def retire_song(song_id):
+    """Hide a song from new setlists without deleting it."""
+    repository.set_song_active(song_id, False)
+
+
+def reactivate_song(song_id):
+    """Make a retired song available for setlists again."""
+    repository.set_song_active(song_id, True)
+
+
+def add_outfit(form):
+    """Validate an outfit form and save it. Return the errors, empty if saved."""
+    outfit, errors = validate_outfit(form)
+    if not errors and repository.find_outfit_by_name(outfit["name"]) is not None:
+        errors.append("An outfit with this name already exists.")
+    if not errors:
+        repository.insert_outfit(outfit)
+    return errors

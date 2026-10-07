@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% block title %}Outfits{% endblock %}
+
+{% block content %}
+<h1>Outfits</h1>
+
+{% if outfits %}
+<table>
+  <thead>
+    <tr><th>Name</th><th>Change time (seconds)</th></tr>
+  </thead>
+  <tbody>
+    {% for outfit in outfits %}
+    <tr><td>{{ outfit.name }}</td><td>{{ outfit.change_seconds }}</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p>No outfits yet.</p>
+{% endif %}
+
+<h2>Add an outfit</h2>
+<form method="post" class="stacked">
+  <label>Name <input name="name" value="{{ form.name }}"></label>
+  <label>Change time (seconds) <input name="change_seconds" value="{{ form.change_seconds }}"></label>
+  <button>Add outfit</button>
+</form>
+{% endblock %}

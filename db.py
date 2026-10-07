@@ -17,6 +17,33 @@ def get_connection():
     return connection
 
 
+def fetch_all(sql, params=()):
+    """Run a SELECT and return every row as a dict."""
+    connection = get_connection()
+    try:
+        rows = connection.execute(sql, params).fetchall()
+    finally:
+        connection.close()
+    return [dict(row) for row in rows]
+
+
+def fetch_one(sql, params=()):
+    """Run a SELECT and return the first row as a dict, or None."""
+    rows = fetch_all(sql, params)
+    return rows[0] if rows else None
+
+
+def execute(sql, params=()):
+    """Run an INSERT or UPDATE, save it, and return the new row's id."""
+    connection = get_connection()
+    try:
+        cursor = connection.execute(sql, params)
+        connection.commit()
+    finally:
+        connection.close()
+    return cursor.lastrowid
+
+
 def init_db():
     """Create the data folder and any missing tables from schema.sql."""
     os.makedirs(os.path.dirname(config.DATABASE_PATH), exist_ok=True)
