@@ -15,3 +15,11 @@ Context: The brief requires two separate feature areas, the catalogue and the sh
 Decision: The code will be split into two folders, catalogue/ and shows/. The show builder will only store a song_id and will ask the catalogue for the full song details when needed.
 Alternatives considered: A simpler option was to put everything in one folder, or organise it only by type, such as keeping all database code together and all pages together. I rejected that because it would mix the two domains and make them harder to separate later.
 Consequences: The cost is that the structure is slightly more complex and some communication between the two parts is needed. The benefit is that the code is cleaner and each domain can be changed or separated more easily later.
+
+## 3. Setlist items reference songs by ID only
+Date: 2026-10-08
+Status: Decided
+Context: The catalogue and show builder are separate domains, so a decision is needed about how setlists refer to songs without tightly coupling both parts.
+Decision: setlist_items stores only the song_id, not the full song data. When the show builder needs the details, it asks the catalogue through two read-only functions, get_songs_by_ids() and list_active_songs().
+Alternatives considered: The normal approach would be a foreign key from song_id to songs, or a SQL JOIN between the show and catalogue tables. It would make a future split into separate services harder because the songs table would then live in a different database, and a foreign key cannot point into another database.
+Consequences: The cost is that the database can no longer guarantee that every song_id actually exists in songs. The benefit is that if the catalogue becomes a separate service later, the show builder can keep storing IDs and only the way it fetches song details would need to change.
