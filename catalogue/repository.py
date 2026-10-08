@@ -22,6 +22,25 @@ def get_song(song_id):
     return db.fetch_one("SELECT * FROM songs WHERE id = ?", (song_id,))
 
 
+def get_songs_with_outfits(song_ids):
+    """The songs with these ids, each with its outfit name and change time."""
+    if not song_ids:
+        return []
+    # One "?" per id, e.g. "?, ?, ?" for three ids.
+    placeholders = ", ".join("?" for _ in song_ids)
+    return db.fetch_all(
+        f"""
+        SELECT songs.id, title, album, year, duration_seconds, energy, kind,
+               outfit_id, active, outfits.name AS outfit_name,
+               outfits.change_seconds AS outfit_change_seconds
+        FROM songs
+        JOIN outfits ON outfits.id = songs.outfit_id
+        WHERE songs.id IN ({placeholders})
+        """,
+        tuple(song_ids),
+    )
+
+
 def find_song_by_title_and_album(title, album):
     """The song with this title and album, or None."""
     return db.fetch_one(
