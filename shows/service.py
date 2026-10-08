@@ -27,6 +27,11 @@ def parse_whole_number(text):
         return None
 
 
+def format_duration(seconds):
+    """Turn 294 seconds into "4:54", for the setlist page."""
+    return f"{seconds // 60}:{seconds % 60:02d}"
+
+
 def validate_show(form):
     """Check a submitted show form and return (show, errors).
 
@@ -95,6 +100,25 @@ def move_in_order(item_ids, item_id, direction):
     return new_order
 
 
+# Reading: setlists joined with song details from the catalogue ----------
+
+
+def get_setlist(show_id):
+    """The show's items in order. Each song item gets a "song" key with the
+    catalogue's details for it, fetched in one call through the seam."""
+    items = repository.list_items(show_id)
+    song_ids = [item["song_id"] for item in items if item["item_type"] == "song"]
+    songs = catalogue_service.get_songs_by_ids(song_ids)
+    for item in items:
+        item["song"] = songs.get(item["song_id"])
+    return items
+
+
+def songs_to_choose():
+    """Active catalogue songs, for the "add a song" picker."""
+    return catalogue_service.list_active_songs()
+
+
 # Saving: these use the database through the repository ------------------
 
 
@@ -111,7 +135,9 @@ def create_show(form):
 
 def add_song_to_setlist(show_id, song_id):
     """Append a song to the end of a show's setlist. Return the errors."""
-    song = catalogue_service.get_songs_by_ids([song_id]).get(song_id)
+    if song_id is None:
+        return ["Choose a song."]
+    song =catalogue_service.get_songs_by_ids([song_id]).get(song_id)
     if song is None:
         return ["That song is not in the catalogue."]
     if not song["active"]:

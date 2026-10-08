@@ -192,6 +192,11 @@ def get_songs_by_ids(song_ids):
     return {song["id"]: song for song in songs}
 
 
+def list_active_songs():
+    """Songs that can be added to a setlist, for the show builder's picker."""
+    return [song for song in repository.list_songs() if song["active"]]
+
+
 def retire_song(song_id):
     """Hide a song from new setlists without deleting it."""
     repository.set_song_active(song_id, False)

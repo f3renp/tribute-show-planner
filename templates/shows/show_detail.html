@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+
+{% block title %}{{ show.name }}{% endblock %}
+
+{% block content %}
+<h1>{{ show.name }}</h1>
+<p>{{ show.venue }}, {{ show.show_date }}. Limit: {{ show.max_minutes }} minutes.</p>
+
+<h2>Setlist</h2>
+{% if items %}
+<table>
+  <thead>
+    <tr><th>#</th><th>Item</th><th>Duration</th><th>Energy</th><th>Kind</th><th>Outfit</th><th></th></tr>
+  </thead>
+  <tbody>
+    {% for item in items %}
+    <tr>
+      <td>{{ item.position }}</td>
+      {% if item.item_type == 'break' %}
+      <td><em>Break: {{ item.break_label }}</em></td>
+      <td>{{ format_duration(item.break_seconds) }}</td>
+      <td></td><td></td><td></td>
+      {% elif item.song %}
+      <td>{{ item.song.title }}</td>
+      <td>{{ format_duration(item.song.duration_seconds) }}</td>
+      <td>{{ item.song.energy }}</td>
+      <td>{{ item.song.kind }}</td>
+      <td>{{ item.song.outfit_name }}</td>
+      {% else %}
+      <td>Unknown song (id {{ item.song_id }})</td>
+      <td></td><td></td><td></td><td></td>
+      {% endif %}
+      <td class="actions">
+        <form method="post" action="{{ url_for('shows.move_item', show_id=show.id, item_id=item.id) }}">
+          <button name="direction" value="up" {% if loop.first %}disabled{% endif %}>Up</button>
+          <button name="direction" value="down" {% if loop.last %}disabled{% endif %}>Down</button>
+        </form>
+        <form method="post" action="{{ url_for('shows.remove_item', show_id=show.id, item_id=item.id) }}">
+          <button>Remove</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p>The setlist is empty.</p>
+{% endif %}
+
+<h2>Add a song</h2>
+{% if songs %}
+<form method="post" action="{{ url_for('shows.add_song', show_id=show.id) }}" class="stacked">
+  <label>Song
+    <select name="song_id">
+      {% for song in songs %}
+      <option value="{{ song.id }}">{{ song.title }} ({{ song.album }})</option>
+      {% endfor %}
+    </select>
+  </label>
+  <button>Add song</button>
+</form>
+{% else %}
+<p>No active songs. Add some in the <a href="{{ url_for('catalogue.song_list') }}">catalogue</a> first.</p>
+{% endif %}
+
+<h2>Add a break</h2>
+<form method="post" action="{{ url_for('shows.add_break', show_id=show.id) }}" class="stacked">
+  <label>Label <input name="break_label" value="{{ break_form.break_label }}" placeholder="Costume change"></label>
+  <label>Length (seconds) <input name="break_seconds" value="{{ break_form.break_seconds }}"></label>
+  <button>Add break</button>
+</form>
+{% endblock %}
