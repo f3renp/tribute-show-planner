@@ -9,6 +9,7 @@ from datetime import date
 
 from catalogue import service as catalogue_service
 from shows import repository
+from shows.rules import format_duration
 
 # A show longer than 4 hours is a typo.
 MAX_SHOW_MINUTES = 4 * 60
@@ -25,11 +26,6 @@ def parse_whole_number(text):
         return int(text.strip())
     except ValueError:
         return None
-
-
-def format_duration(seconds):
-    """Turn 294 seconds into "4:54", for the setlist page."""
-    return f"{seconds // 60}:{seconds % 60:02d}"
 
 
 def validate_show(form):
