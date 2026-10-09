@@ -1,25 +1,49 @@
 """Unit tests for the setlist checks in shows/rules.py: no database, no Flask."""
 from shows.rules import (
+    check_ballads_in_a_row,
+    check_energy_pacing,
+    check_opener_and_closer,
     check_outfit_changes,
+    check_retired_and_repeated_songs,
     check_running_time,
     format_duration,
+    is_high_energy,
     setlist_seconds,
 )
 
 
-def song_item(position, title, duration=240, outfit_id=1, change_seconds=0):
-    """A song item shaped like the ones service.get_setlist returns."""
+def song_item(
+    position,
+    title,
+    duration=240,
+    outfit_id=1,
+    change_seconds=0,
+    energy=4,
+    kind="dance",
+    active=1,
+    song_id=None,
+):
+    """A song item shaped like the ones service.get_setlist returns.
+
+    song_id defaults to the position, so every song is different unless
+    a test passes the same song_id twice.
+    """
+    if song_id is None:
+        song_id = position
     return {
         "position": position,
         "item_type": "song",
-        "song_id": position,
+        "song_id": song_id,
         "song": {
-            "id": position,
+            "id": song_id,
             "title": title,
             "duration_seconds": duration,
             "outfit_id": outfit_id,
             "outfit_name": f"Outfit {outfit_id}",
             "outfit_change_seconds": change_seconds,
+            "energy": energy,
+            "kind": kind,
+            "active": active,
         },
     }
 
@@ -151,3 +175,186 @@ def test_missing_song_is_skipped_in_outfit_check():
         song_item(3, "Smooth Criminal", outfit_id=1),
     ]
     assert check_outfit_changes(items) == []
+
+
+# Energy pacing ----------------------------------------------------------
+
+
+def test_is_high_energy_starts_at_four():
+    assert is_high_energy({"energy": 4})
+    assert is_high_energy({"energy": 5})
+    assert not is_high_energy({"energy": 3})
+
+
+def test_two_high_energy_songs_in_a_row_are_fine():
+    items = [song_item(1, "Bad", energy=5), song_item(2, "Thriller", energy=4)]
+    assert check_energy_pacing(items) == []
+
+
+def test_third_high_energy_song_in_a_row_is_reported():
+    items = [
+        song_item(1, "Bad", energy=5),
+        song_item(2, "Thriller", energy=4),
+        song_item(3, "Beat It", energy=5),
+    ]
+    problems = check_energy_pacing(items)
+    assert len(problems) == 1
+    assert "Position 3" in problems[0]
+
+
+def test_long_run_is_reported_once():
+    items = [song_item(position, f"Song {position}", energy=5) for position in range(1, 6)]
+    assert len(check_energy_pacing(items)) == 1
+
+
+def test_calm_song_ends_the_run():
+    items = [
+        song_item(1, "Bad", energy=5),
+        song_item(2, "Thriller", energy=4),
+        song_item(3, "Human Nature", energy=2),
+        song_item(4, "Beat It", energy=5),
+    ]
+    assert check_energy_pacing(items) == []
+
+
+def test_break_ends_the_run():
+    items = [
+        song_item(1, "Bad", energy=5),
+        song_item(2, "Thriller", energy=4),
+        break_item(3, 60),
+        song_item(4, "Beat It", energy=5),
+    ]
+    assert check_energy_pacing(items) == []
+
+
+# Ballads in a row -------------------------------------------------------
+
+
+def test_two_ballads_in_a_row_are_reported():
+    items = [
+        song_item(1, "Human Nature", kind="ballad"),
+        song_item(2, "Heal the World", kind="ballad"),
+    ]
+    problems = check_ballads_in_a_row(items)
+    assert len(problems) == 1
+    assert "Heal the World" in problems[0]
+
+
+def test_three_ballads_in_a_row_give_two_problems():
+    items = [song_item(position, f"Ballad {position}", kind="ballad") for position in (1, 2, 3)]
+    assert len(check_ballads_in_a_row(items)) == 2
+
+
+def test_dance_song_between_ballads_is_fine():
+    items = [
+        song_item(1, "Human Nature", kind="ballad"),
+        song_item(2, "Bad", kind="dance"),
+        song_item(3, "Heal the World", kind="ballad"),
+    ]
+    assert check_ballads_in_a_row(items) == []
+
+
+def test_break_between_ballads_is_fine():
+    items = [
+        song_item(1, "Human Nature", kind="ballad"),
+        break_item(2, 60),
+        song_item(3, "Heal the World", kind="ballad"),
+    ]
+    assert check_ballads_in_a_row(items) == []
+
+
+# Opener and closer ------------------------------------------------------
+
+
+def test_high_energy_opener_and_closer_are_fine():
+    items = [
+        song_item(1, "Wanna Be Startin' Somethin'", energy=5),
+        song_item(2, "Human Nature", energy=2),
+        song_item(3, "Billie Jean", energy=4),
+    ]
+    assert check_opener_and_closer(items) == []
+
+
+def test_calm_opener_is_reported():
+    items = [song_item(1, "Human Nature", energy=2), song_item(2, "Bad", energy=5)]
+    problems = check_opener_and_closer(items)
+    assert len(problems) == 1
+    assert problems[0].startswith("The opener")
+
+
+def test_calm_closer_is_reported():
+    items = [song_item(1, "Bad", energy=5), song_item(2, "Human Nature", energy=2)]
+    problems = check_opener_and_closer(items)
+    assert len(problems) == 1
+    assert problems[0].startswith("The closer")
+
+
+def test_breaks_are_not_opener_or_closer():
+    items = [
+        break_item(1, 60),
+        song_item(2, "Bad", energy=5),
+        song_item(3, "Thriller", energy=5),
+        break_item(4, 60),
+    ]
+    assert check_opener_and_closer(items) == []
+
+
+def test_single_calm_song_is_reported_once():
+    items = [song_item(1, "Human Nature", energy=2)]
+    assert len(check_opener_and_closer(items)) == 1
+
+
+def test_setlist_without_songs_has_no_opener_problem():
+    assert check_opener_and_closer([break_item(1, 60)]) == []
+
+
+# Retired and repeated songs ---------------------------------------------
+
+
+def test_active_different_songs_are_fine():
+    items = [song_item(1, "Bad"), song_item(2, "Thriller")]
+    assert check_retired_and_repeated_songs(items) == []
+
+
+def test_retired_song_is_reported():
+    items = [song_item(1, "Bad"), song_item(2, "Dangerous", active=0)]
+    problems = check_retired_and_repeated_songs(items)
+    assert problems == ['Position 2: "Dangerous" is retired.']
+
+
+def test_missing_song_is_reported():
+    problems = check_retired_and_repeated_songs([missing_song_item(1)])
+    assert problems == ["Position 1: song 99 is no longer in the catalogue."]
+
+
+def test_same_song_twice_is_reported_with_first_position():
+    items = [
+        song_item(1, "Bad", song_id=7),
+        song_item(2, "Thriller"),
+        song_item(3, "Bad", song_id=7),
+    ]
+    problems = check_retired_and_repeated_songs(items)
+    assert problems == ["Position 3: the same song is already at position 1."]
+
+
+def test_breaks_are_ignored_by_song_check():
+    assert check_retired_and_repeated_songs([break_item(1, 60)]) == []
+
+
+def test_missing_song_does_not_end_an_energy_run():
+    items = [
+        song_item(1, "Bad", energy=5),
+        missing_song_item(2),
+        song_item(3, "Thriller", energy=4),
+        song_item(4, "Beat It", energy=5),
+    ]
+    assert len(check_energy_pacing(items)) == 1
+
+
+def test_missing_song_does_not_separate_ballads():
+    items = [
+        song_item(1, "Human Nature", kind="ballad"),
+        missing_song_item(2),
+        song_item(3, "Heal the World", kind="ballad"),
+    ]
+    assert len(check_ballads_in_a_row(items)) == 1
