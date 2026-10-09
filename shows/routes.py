@@ -1,8 +1,8 @@
-"""Show builder web pages. Each route reads the request, calls the service
-or repository, and renders a template. No rules live here."""
+"""Show builder web pages. Each route reads the request, calls the service,
+repository or rules, and renders a template. No rules live here."""
 from flask import Blueprint, abort, redirect, render_template, request, url_for
 
-from shows import repository, service
+from shows import repository, rules, service
 
 bp = Blueprint("shows", __name__, url_prefix="/shows")
 
@@ -33,11 +33,15 @@ def get_show_or_404(show_id):
 
 
 def render_show_page(show, errors=(), break_form=None):
-    """Show one show with its setlist and the forms to add to it."""
+    """Show one show with its setlist, the check results, and the forms to
+    add to it."""
+    items = service.get_setlist(show["id"])
     return render_template(
         "shows/show_detail.html",
         show=show,
-        items=service.get_setlist(show["id"]),
+        items=items,
+        total_seconds=rules.setlist_seconds(items),
+        problems=rules.check_setlist(items, show["max_minutes"]),
         songs=service.songs_to_choose(),
         format_duration=service.format_duration,
         errors=errors,

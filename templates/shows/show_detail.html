@@ -43,6 +43,18 @@
     {% endfor %}
   </tbody>
 </table>
+<p>Running time: {{ format_duration(total_seconds) }} of {{ show.max_minutes }} minutes.</p>
+
+<h2>Checks</h2>
+{% if problems %}
+<ul class="problems">
+  {% for problem in problems %}
+  <li>{{ problem }}</li>
+  {% endfor %}
+</ul>
+{% else %}
+<p>No problems found.</p>
+{% endif %}
 {% else %}
 <p>The setlist is empty.</p>
 {% endif %}

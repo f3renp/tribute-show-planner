@@ -6,6 +6,7 @@ from shows.rules import (
     check_outfit_changes,
     check_retired_and_repeated_songs,
     check_running_time,
+    check_setlist,
     format_duration,
     is_high_energy,
     setlist_seconds,
@@ -358,3 +359,31 @@ def test_missing_song_does_not_separate_ballads():
         song_item(3, "Heal the World", kind="ballad"),
     ]
     assert len(check_ballads_in_a_row(items)) == 1
+
+
+# All checks together ----------------------------------------------------
+
+
+def test_good_setlist_has_no_problems():
+    items = [
+        song_item(1, "Wanna Be Startin' Somethin'", energy=5, outfit_id=1),
+        song_item(2, "Human Nature", energy=2, kind="ballad", outfit_id=1),
+        break_item(3, 90),
+        song_item(4, "Thriller", energy=4, outfit_id=2, change_seconds=90),
+    ]
+    assert check_setlist(items, 20) == []
+
+
+def test_check_setlist_collects_problems_from_several_checks():
+    items = [
+        song_item(1, "Human Nature", energy=2, kind="ballad", duration=400),
+        song_item(2, "Heal the World", energy=2, kind="ballad", outfit_id=2, change_seconds=60),
+        song_item(3, "Human Nature", energy=2, kind="ballad", song_id=1, active=0),
+    ]
+    problems = check_setlist(items, 1)
+    assert any(problem.startswith("Running time") for problem in problems)
+    assert any("changing into" in problem for problem in problems)
+    assert any("second ballad" in problem for problem in problems)
+    assert any(problem.startswith("The opener") for problem in problems)
+    assert any("is retired" in problem for problem in problems)
+    assert any("already at position" in problem for problem in problems)

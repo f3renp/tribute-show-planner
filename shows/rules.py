@@ -186,3 +186,15 @@ def check_retired_and_repeated_songs(items):
         else:
             first_position[song_id] = position
     return problems
+
+
+def check_setlist(items, max_minutes):
+    """Run every check and return all their problems in one list."""
+    return (
+        check_running_time(items, max_minutes)
+        + check_outfit_changes(items)
+        + check_energy_pacing(items)
+        + check_ballads_in_a_row(items)
+        + check_opener_and_closer(items)
+        + check_retired_and_repeated_songs(items)
+    )
