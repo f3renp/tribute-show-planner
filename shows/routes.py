@@ -36,11 +36,13 @@ def render_show_page(show, errors=(), break_form=None):
     """Show one show with its setlist, the check results, and the forms to
     add to it."""
     items = service.get_setlist(show["id"])
+    total_seconds = rules.setlist_seconds(items)
     return render_template(
         "shows/show_detail.html",
         show=show,
         items=items,
-        total_seconds=rules.setlist_seconds(items),
+        total_seconds=total_seconds,
+        over_limit=rules.is_over_limit(total_seconds, show["max_minutes"]),
         problems=rules.check_setlist(items, show["max_minutes"]),
         songs=service.songs_to_choose(),
         format_duration=service.format_duration,

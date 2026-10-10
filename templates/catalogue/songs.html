@@ -4,7 +4,7 @@
 
 {% block content %}
 <h1>Songs</h1>
-<p><a href="{{ url_for('catalogue.new_song') }}">Add a song</a></p>
+<p><a class="button" href="{{ url_for('catalogue.new_song') }}">Add a song</a></p>
 
 {% if songs %}
 <table>
@@ -28,7 +28,8 @@
       <td class="actions">
         <a href="{{ url_for('catalogue.edit_song', song_id=song.id) }}">Edit</a>
         {% if song.active %}
-        <form method="post" action="{{ url_for('catalogue.retire', song_id=song.id) }}">
+        <form method="post" action="{{ url_for('catalogue.retire', song_id=song.id) }}"
+              data-confirm="Retire {{ song.title }}? It stays in existing setlists but cannot be added to new ones.">
           <button>Retire</button>
         </form>
         {% else %}

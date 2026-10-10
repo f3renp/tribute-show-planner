@@ -34,8 +34,10 @@
       {% endfor %}
     </select>
   </label>
-  <button>Save</button>
-  <a href="{{ url_for('catalogue.song_list') }}">Cancel</a>
+  <div class="form-buttons">
+    <button>Save</button>
+    <a href="{{ url_for('catalogue.song_list') }}">Cancel</a>
+  </div>
 </form>
 {% endif %}
 {% endblock %}

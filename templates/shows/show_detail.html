@@ -4,7 +4,7 @@
 
 {% block content %}
 <h1>{{ show.name }}</h1>
-<p>{{ show.venue }}, {{ show.show_date }}. Limit: {{ show.max_minutes }} minutes.</p>
+<p class="show-facts">{{ show.venue }}, {{ show.show_date }}. Limit: {{ show.max_minutes }} minutes.</p>
 
 <h2>Setlist</h2>
 {% if items %}
@@ -14,7 +14,7 @@
   </thead>
   <tbody>
     {% for item in items %}
-    <tr>
+    <tr class="{{ item.item_type }}">
       <td>{{ item.position }}</td>
       {% if item.item_type == 'break' %}
       <td><em>Break: {{ item.break_label }}</em></td>
@@ -35,7 +35,8 @@
           <button name="direction" value="up" {% if loop.first %}disabled{% endif %}>Up</button>
           <button name="direction" value="down" {% if loop.last %}disabled{% endif %}>Down</button>
         </form>
-        <form method="post" action="{{ url_for('shows.remove_item', show_id=show.id, item_id=item.id) }}">
+        <form method="post" action="{{ url_for('shows.remove_item', show_id=show.id, item_id=item.id) }}"
+              data-confirm="Remove this item from the setlist?">
           <button>Remove</button>
         </form>
       </td>
@@ -43,7 +44,7 @@
     {% endfor %}
   </tbody>
 </table>
-<p>Running time: {{ format_duration(total_seconds) }} of {{ show.max_minutes }} minutes.</p>
+<p class="running-time{% if over_limit %} over-limit{% endif %}">Running time <strong>{{ format_duration(total_seconds) }}</strong> of {{ format_duration(show.max_minutes * 60) }} limit</p>
 
 <h2>Checks</h2>
 {% if problems %}
@@ -53,7 +54,7 @@
   {% endfor %}
 </ul>
 {% else %}
-<p>No problems found.</p>
+<p class="no-problems">No problems found.</p>
 {% endif %}
 {% else %}
 <p>The setlist is empty.</p>

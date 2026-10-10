@@ -9,6 +9,7 @@ from shows.rules import (
     check_setlist,
     format_duration,
     is_high_energy,
+    is_over_limit,
     setlist_seconds,
 )
 
@@ -102,6 +103,12 @@ def test_running_time_over_limit_is_reported():
 def test_breaks_count_towards_running_time():
     items = [song_item(1, "Bad", duration=540), break_item(2, 120)]
     assert len(check_running_time(items, 10)) == 1
+
+
+def test_is_over_limit_only_above_the_limit():
+    assert is_over_limit(599, 10) is False
+    assert is_over_limit(600, 10) is False
+    assert is_over_limit(601, 10) is True
 
 
 # Outfit changes ---------------------------------------------------------

@@ -33,13 +33,18 @@ def setlist_seconds(items):
     return total
 
 
+def is_over_limit(total_seconds, max_minutes):
+    """True if the running time is longer than the show's limit.
+    Exactly at the limit is fine."""
+    return total_seconds > max_minutes * 60
+
+
 def check_running_time(items, max_minutes):
     """Report it when the setlist is longer than the show's limit."""
     total = setlist_seconds(items)
-    limit = max_minutes * 60
-    if total <= limit:
+    if not is_over_limit(total, max_minutes):
         return []
-    over = format_duration(total - limit)
+    over = format_duration(total - max_minutes * 60)
     return [
         f"Running time is {format_duration(total)}, "
         f"{over} over the {max_minutes}-minute limit."
