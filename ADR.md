@@ -23,3 +23,11 @@ Context: The catalogue and show builder are separate domains, so a decision is n
 Decision: setlist_items stores only the song_id, not the full song data. When the show builder needs the details, it asks the catalogue through two read-only functions, get_songs_by_ids() and list_active_songs().
 Alternatives considered: The normal approach would be a foreign key from song_id to songs, or a SQL JOIN between the show and catalogue tables. It would make a future split into separate services harder because the songs table would then live in a different database, and a foreign key cannot point into another database.
 Consequences: The cost is that the database can no longer guarantee that every song_id actually exists in songs. The benefit is that if the catalogue becomes a separate service later, the show builder can keep storing IDs and only the way it fetches song details would need to change.
+
+## 4. Test rules and services first, keep routes thin
+Date: 2026-10-10
+Status: Decided
+Context: The brief asked for at least 70% test coverage, so I focused on testing the parts of the program where the important decisions are made. I wanted to make sure the main rules of the app were properly checked.
+Decision: I tested the six checks in shows/rules.py most thoroughly, reaching 100% coverage, and then tested the services and repositories, which are around 99-100%. I kept the routes thin because they do not contain the actual rules; they mainly call the services, run the checks, and pass the results to the pages.
+Alternatives considered: I could have tested the web pages using Flask's test client as well. I did not make that the priority because the brief asks for coverage of the core business logic, and page tests would mostly check HTML and could break after visual changes even when the actual rules still work correctly.
+Consequences: The downside is that the routes and app.py still have 0% coverage, so some page or routing problems might not be caught by the tests. The benefit is that the most important logic is well tested, the tests are fast, and the project now has 77% coverage of the app code, which is above the required 70%.
