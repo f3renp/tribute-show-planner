@@ -7,13 +7,16 @@ from waitress import serve
 
 import config
 import db
+import seed
 from catalogue.routes import bp as catalogue_bp
 from shows.routes import bp as shows_bp
 
 
 def create_app():
-    """Create missing tables, then build and return the Flask app."""
+    """Create missing tables, add the demo catalogue if it is empty, then
+    build and return the Flask app."""
     db.init_db()
+    seed.seed_demo_catalogue()
     app = Flask(__name__)
     app.register_blueprint(catalogue_bp)
     app.register_blueprint(shows_bp)
