@@ -1,6 +1,6 @@
 """Entry point: builds the Flask app and serves it with waitress.
 
-Start it with: uv run python app.py
+Start it with: python app.py (or uv run python app.py)
 """
 from flask import Flask, redirect, url_for
 from waitress import serve
