@@ -118,5 +118,6 @@ and only call the services. See ADR-4 in `ADR.md`.
 - `seed.py`: the demo catalogue.
 - `catalogue/`, `shows/`: the two domains, each split into `routes.py`
   (pages), `service.py` (rules and validation) and `repository.py` (SQL).
-- `templates/`, `static/`: HTML templates and CSS.
+- `templates/`, `static/`: HTML templates, CSS and a little JavaScript.
+- `docs/diagrams.md`: architecture and database diagrams.
 - `ADR.md`: architecture decisions. `AI_USAGE.md`: AI usage log.
