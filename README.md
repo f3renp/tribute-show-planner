@@ -96,7 +96,7 @@ With uv: `uv run python -m pytest --cov=. --cov-report=term-missing`
 `.coveragerc` leaves the `tests/` folder out of the measurement, so the
 total is for the app code only.
 
-Result on 2026-10-10: **144 passed, 77% total coverage.**
+Result on 2026-10-11: **145 passed, 77% total coverage.**
 
 | File | Coverage |
 |------|----------|
