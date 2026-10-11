@@ -31,3 +31,11 @@ Context: The brief asked for at least 70% test coverage, so I focused on testing
 Decision: I tested the six checks in shows/rules.py most thoroughly, reaching 100% coverage, and then tested the services and repositories, which are around 99-100%. I kept the routes thin because they do not contain the actual rules; they mainly call the services, run the checks, and pass the results to the pages.
 Alternatives considered: I could have tested the web pages using Flask's test client as well. I did not make that the priority because the brief asks for coverage of the core business logic, and page tests would mostly check HTML and could break after visual changes even when the actual rules still work correctly.
 Consequences: The downside is that the routes and app.py still have 0% coverage, so some page or routing problems might not be caught by the tests. The benefit is that the most important logic is well tested, the tests are fast, and the project now has 77% coverage of the app code, which is above the required 70%.
+
+## 5. No login in this version
+Date: 2026-10-11
+Status: Decided
+Context: The app is designed as a simple tool for one tribute act. The musical director and manager have different jobs, but they are still part of the same small trusted team. Because they trust each other, separate accounts and permissions are not necessary yet.
+Decision: I decided not to build a login in this version.
+Alternatives considered: I could have added something simple like one shared password for the whole app, or used a login library such as Flask-Login. One shared password would add very little because everyone would still use the same identity. It would not tell us who changed what, so it would not give much accountability. A full login with a library would add extra work without being necessary yet.
+Consequences: Right now the app runs on a trusted machine or local network, so anyone with access to that network can view and change the catalogue and shows. A login would become necessary before deploying it somewhere like Azure where other people could access it, and that would mean adding user accounts, password handling, authentication, probably new database tables, and deciding which user can see or edit which shows and songs.
