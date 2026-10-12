@@ -56,6 +56,62 @@ and the tables if they are missing. If the catalogue is empty, it also adds
 a demo catalogue (`seed.py`): 7 outfits and 20 songs, with one song
 already retired. A catalogue that already has data is never changed.
 
+## Run with Docker
+
+The `Dockerfile` is the course's provided template, with only its four
+`TODO` lines filled in. From the repository root:
+
+```
+docker build -t tribute-show-planner .
+docker run -p 8000:8000 -v tribute-data:/data tribute-show-planner
+```
+
+Then open http://localhost:8000. Inside the container `DATA_DIR` is
+`/data`, so the database is `/data/tribute.db`. The `tribute-data` volume
+keeps it when the container is removed and started again.
+
+## Container contract check (§7)
+
+Output of the provided `run.sh`, run on 2026-10-12:
+
+```
+=== SDD Assignment 1 contract check ===
+Repository: /c/Users/Fernando/SoftwareandDevops/tribute-show-planner
+
+==> Repository shape
+  PASS  one Dockerfile, one manifest (requirements.txt)
+
+==> Build from a clean context, no build args
+  PASS  image built
+  PASS  image size 220 MB
+
+==> Start on PORT=8000 and reach it from the host
+  PASS  HTTP 302 from http://localhost:8000/
+
+==> SQLite file under DATA_DIR
+  PASS  found in /data: tribute.db
+
+==> Data persists, and a second boot does not re-seed
+  PASS  volume at /data persists
+  PASS  row counts unchanged across restart: outfits=7 setlist_items=0 shows=0 songs=20
+
+==> PORT override is honoured (not hardcoded)
+  PASS  HTTP 302 from http://localhost:9123/
+
+=== ALL CHECKS PASSED ===
+Paste this output into your README as the §7 evidence.
+```
+
+Notes:
+
+- In the original output the row-counts line was garbled by Windows line
+  endings. The line above shows the real counts: `outfits=7
+  setlist_items=0 shows=0 songs=20`.
+- I ran it in Git Bash on Windows. The script calls `mktemp -t sdd-check`,
+  and GNU `mktemp` (the one in Git Bash) needs X's in the template to
+  replace with random characters. So I defined a `mktemp` shell function
+  that adds `XXXXXX` to the template, then ran the script unchanged.
+
 ## Configuration
 
 Everything is set through environment variables. All of them are optional
@@ -120,4 +176,5 @@ and only call the services. See ADR-4 in `ADR.md`.
   (pages), `service.py` (rules and validation) and `repository.py` (SQL).
 - `templates/`, `static/`: HTML templates, CSS and a little JavaScript.
 - `docs/diagrams.md`: architecture and database diagrams.
+- `Dockerfile`: the provided container template with its TODOs filled in.
 - `ADR.md`: architecture decisions. `AI_USAGE.md`: AI usage log.
