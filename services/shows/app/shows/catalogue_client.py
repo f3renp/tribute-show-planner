@@ -4,24 +4,39 @@ the rest of the show builder never talks to the catalogue any other way.
 It keeps the two functions shows.service used to import from
 catalogue.service, with the same return values, so the service code and
 the setlist checks did not have to change (ADR-3, ADR-6).
+
+Every way a call can fail is turned into one exception,
+CatalogueUnavailable, so callers only have to handle one thing.
 """
 import json
+from http.client import HTTPException
+from urllib.error import URLError
 from urllib.parse import urlencode
 from urllib.request import urlopen
 
 import config
 
 
+class CatalogueUnavailable(Exception):
+    """The catalogue could not be reached or gave an answer we cannot use."""
+
+
 def get_json(path):
     """GET CATALOGUE_URL + path and return the decoded JSON body.
 
-    TODO: if the catalogue is down this raises (URLError or a timeout) and
-    the show page fails with a 500. Decide how the page should degrade,
-    for example show the setlist with "song details unavailable".
+    Raises CatalogueUnavailable when:
+    - the catalogue cannot be reached (URLError, ConnectionError),
+    - it answers with a 4xx or 5xx status (HTTPError, a kind of URLError),
+    - it takes longer than CATALOGUE_TIMEOUT seconds (TimeoutError),
+    - the connection breaks mid-answer (HTTPException),
+    - the body is not JSON (ValueError).
     """
     url = config.CATALOGUE_URL.rstrip("/") + path
-    with urlopen(url, timeout=config.CATALOGUE_TIMEOUT) as response:
-        return json.load(response)
+    try:
+        with urlopen(url, timeout=config.CATALOGUE_TIMEOUT) as response:
+            return json.load(response)
+    except (URLError, TimeoutError, ConnectionError, HTTPException, ValueError) as error:
+        raise CatalogueUnavailable(f"GET {url} failed: {error}") from error
 
 
 def get_songs_by_ids(song_ids):

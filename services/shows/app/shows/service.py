@@ -8,7 +8,8 @@ HTTP through shows.catalogue_client.
 """
 from datetime import date
 
-from shows import catalogue_client, repository
+from shows import catalogue_client, repository, rules
+from shows.catalogue_client import CatalogueUnavailable
 from shows.rules import format_duration
 
 # A show longer than 4 hours is a typo.
@@ -18,6 +19,13 @@ MAX_SHOW_MINUTES = 4 * 60
 MAX_BREAK_SECONDS = 30 * 60
 
 DIRECTIONS = ("up", "down")
+
+# A song cannot be checked (exists? retired?) without the catalogue, so it
+# is not added rather than added unchecked.
+CATALOGUE_DOWN_ADD_SONG = (
+    "Catalogue service unavailable: the song could not be checked and was "
+    "not added. Try again later."
+)
 
 
 def parse_whole_number(text):
@@ -99,20 +107,61 @@ def move_in_order(item_ids, item_id, direction):
 # Reading: setlists joined with song details from the catalogue ----------
 
 
-def get_setlist(show_id):
-    """The show's items in order. Each song item gets a "song" key with the
-    catalogue's details for it, fetched in one HTTP call through the seam."""
-    items = repository.list_items(show_id)
-    song_ids = [item["song_id"] for item in items if item["item_type"] == "song"]
-    songs = catalogue_client.get_songs_by_ids(song_ids)
+def song_ids_in(items):
+    """The song ids of the song items, in setlist order."""
+    return [item["song_id"] for item in items if item["item_type"] == "song"]
+
+
+def attach_songs(items, songs_by_id):
+    """Give each item a "song" key: its details, or None if not known."""
     for item in items:
-        item["song"] = songs.get(item["song_id"])
+        item["song"] = songs_by_id.get(item["song_id"])
     return items
 
 
-def songs_to_choose():
-    """Active catalogue songs, for the "add a song" picker."""
-    return catalogue_client.list_active_songs()
+def get_setlist(show_id):
+    """The show's items in order. Each song item gets a "song" key with the
+    catalogue's details for it, fetched in one HTTP call through the seam.
+
+    Raises CatalogueUnavailable if the catalogue cannot be reached.
+    """
+    items = repository.list_items(show_id)
+    songs_by_id = catalogue_client.get_songs_by_ids(song_ids_in(items))
+    return attach_songs(items, songs_by_id)
+
+
+def show_overview(show):
+    """Everything the show page needs, as plain values.
+
+    When the catalogue is unavailable the show still loads, degraded: the
+    setlist (positions, breaks, song ids) comes from our own database, but
+    song details are None, the running time is unknown, the checks are
+    skipped (problems is None, not an empty list, which would mean "no
+    problems") and there are no songs to choose from.
+    """
+    items = repository.list_items(show["id"])
+    try:
+        songs_by_id = catalogue_client.get_songs_by_ids(song_ids_in(items))
+        songs_to_choose = catalogue_client.list_active_songs()
+    except CatalogueUnavailable:
+        return {
+            "catalogue_available": False,
+            "items": attach_songs(items, {}),
+            "total_seconds": None,
+            "over_limit": False,
+            "problems": None,
+            "songs": [],
+        }
+    attach_songs(items, songs_by_id)
+    total_seconds = rules.setlist_seconds(items)
+    return {
+        "catalogue_available": True,
+        "items": items,
+        "total_seconds": total_seconds,
+        "over_limit": rules.is_over_limit(total_seconds, show["max_minutes"]),
+        "problems": rules.check_setlist(items, show["max_minutes"]),
+        "songs": songs_to_choose,
+    }
 
 
 # Saving: these use the database through the repository ------------------
@@ -133,7 +182,10 @@ def add_song_to_setlist(show_id, song_id):
     """Append a song to the end of a show's setlist. Return the errors."""
     if song_id is None:
         return ["Choose a song."]
-    song = catalogue_client.get_songs_by_ids([song_id]).get(song_id)
+    try:
+        song = catalogue_client.get_songs_by_ids([song_id]).get(song_id)
+    except CatalogueUnavailable:
+        return [CATALOGUE_DOWN_ADD_SONG]
     if song is None:
         return ["That song is not in the catalogue."]
     if not song["active"]:

@@ -2,7 +2,7 @@
 repository or rules, and renders a template. No rules live here."""
 from flask import Blueprint, abort, redirect, render_template, request, url_for
 
-from shows import repository, rules, service
+from shows import repository, service
 
 bp = Blueprint("shows", __name__, url_prefix="/shows")
 
@@ -34,17 +34,12 @@ def get_show_or_404(show_id):
 
 def render_show_page(show, errors=(), break_form=None):
     """Show one show with its setlist, the check results, and the forms to
-    add to it."""
-    items = service.get_setlist(show["id"])
-    total_seconds = rules.setlist_seconds(items)
+    add to it. If the catalogue is down, the overview says so and the page
+    shows a notice instead of failing."""
     return render_template(
         "shows/show_detail.html",
         show=show,
-        items=items,
-        total_seconds=total_seconds,
-        over_limit=rules.is_over_limit(total_seconds, show["max_minutes"]),
-        problems=rules.check_setlist(items, show["max_minutes"]),
-        songs=service.songs_to_choose(),
+        **service.show_overview(show),
         format_duration=service.format_duration,
         errors=errors,
         break_form=break_form or {},

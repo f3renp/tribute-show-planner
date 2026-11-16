@@ -8,6 +8,7 @@ from waitress import serve
 
 import config
 import db
+from request_log import log_requests
 from shows.routes import bp as shows_bp
 
 
@@ -15,6 +16,7 @@ def create_app():
     """Create missing tables, then build and return the Flask app."""
     db.init_db()
     app = Flask(__name__)
+    log_requests(app)
     app.register_blueprint(shows_bp)
 
     @app.context_processor

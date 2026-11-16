@@ -38,3 +38,15 @@ def catalogue(monkeypatch):
     monkeypatch.setattr(catalogue_client, "get_songs_by_ids", get_songs_by_ids)
     monkeypatch.setattr(catalogue_client, "list_active_songs", list_active_songs)
     return songs
+
+
+@pytest.fixture
+def catalogue_down(monkeypatch):
+    """A fake catalogue that is stopped: both catalogue_client functions
+    raise CatalogueUnavailable, as the real ones do when the call fails."""
+
+    def unavailable(*args):
+        raise catalogue_client.CatalogueUnavailable("catalogue is down (test)")
+
+    monkeypatch.setattr(catalogue_client, "get_songs_by_ids", unavailable)
+    monkeypatch.setattr(catalogue_client, "list_active_songs", unavailable)

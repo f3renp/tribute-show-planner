@@ -11,6 +11,7 @@ import db
 import seed
 from catalogue.api import bp as api_bp
 from catalogue.routes import bp as catalogue_bp
+from request_log import log_requests
 
 
 def create_app():
@@ -19,6 +20,7 @@ def create_app():
     db.init_db()
     seed.seed_demo_catalogue()
     app = Flask(__name__)
+    log_requests(app)
     app.register_blueprint(catalogue_bp)
     app.register_blueprint(api_bp)
 
