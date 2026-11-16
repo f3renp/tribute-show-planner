@@ -250,14 +250,16 @@ form.stacked > button,
 
 .errors,
 .problems,
-.no-problems {
+.no-problems,
+.catalogue-down {
   padding: 0.9rem 1.2rem;
   border-radius: 4px;
   border-left: 5px solid;
 }
 
 .errors,
-.problems {
+.problems,
+.catalogue-down {
   list-style: none;
   color: var(--bad-text);
   background: var(--bad-back);

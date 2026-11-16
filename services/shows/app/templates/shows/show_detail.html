@@ -6,6 +6,11 @@
 <h1>{{ show.name }}</h1>
 <p class="show-facts">{{ show.venue }}, {{ show.show_date }}. Limit: {{ show.max_minutes }} minutes.</p>
 
+{% if not catalogue_available %}
+<p class="catalogue-down">Catalogue service unavailable. The setlist is shown without song details,
+  the checks are skipped and songs cannot be added. Try again later.</p>
+{% endif %}
+
 <h2>Setlist</h2>
 {% if items %}
 <table>
@@ -26,6 +31,9 @@
       <td>{{ item.song.energy }}</td>
       <td>{{ item.song.kind }}</td>
       <td>{{ item.song.outfit_name }}</td>
+      {% elif not catalogue_available %}
+      <td>Song details unavailable (id {{ item.song_id }})</td>
+      <td></td><td></td><td></td><td></td>
       {% else %}
       <td>Unknown song (id {{ item.song_id }})</td>
       <td></td><td></td><td></td><td></td>
@@ -44,10 +52,16 @@
     {% endfor %}
   </tbody>
 </table>
+{% if total_seconds is none %}
+<p class="running-time">Running time unknown (catalogue unavailable) of {{ format_duration(show.max_minutes * 60) }} limit</p>
+{% else %}
 <p class="running-time{% if over_limit %} over-limit{% endif %}">Running time <strong>{{ format_duration(total_seconds) }}</strong> of {{ format_duration(show.max_minutes * 60) }} limit</p>
+{% endif %}
 
 <h2>Checks</h2>
-{% if problems %}
+{% if problems is none %}
+<p class="checks-skipped">Checks skipped: the catalogue service is unavailable.</p>
+{% elif problems %}
 <ul class="problems">
   {% for problem in problems %}
   <li>{{ problem }}</li>
@@ -61,7 +75,9 @@
 {% endif %}
 
 <h2>Add a song</h2>
-{% if songs %}
+{% if not catalogue_available %}
+<p>Songs cannot be added while the catalogue service is unavailable.</p>
+{% elif songs %}
 <form method="post" action="{{ url_for('shows.add_song', show_id=show.id) }}" class="stacked">
   <label>Song
     <select name="song_id">

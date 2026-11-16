@@ -229,3 +229,44 @@ def test_remove_item_closes_the_gap_in_positions(catalogue):
     assert item_labels(show_id) == ["Billie Jean", "Thriller"]
     positions = [item["position"] for item in repository.list_items(show_id)]
     assert positions == [1, 2]
+
+
+# The show page data, with the catalogue up and down -----------------------
+
+
+@pytest.mark.usefixtures("database")
+def test_show_overview_with_the_catalogue_up_has_details_and_checks(catalogue):
+    show_id = create_show()
+    service.add_song_to_setlist(show_id, add_song(catalogue, "Billie Jean"))
+    overview = service.show_overview(repository.get_show(show_id))
+    assert overview["catalogue_available"] is True
+    assert overview["items"][0]["song"]["title"] == "Billie Jean"
+    assert overview["total_seconds"] == 294
+    assert overview["problems"] == []
+    assert [song["title"] for song in overview["songs"]] == ["Billie Jean"]
+
+
+@pytest.mark.usefixtures("database", "catalogue_down")
+def test_show_loads_degraded_when_the_catalogue_is_down():
+    show_id = create_show()
+    # Saved straight through the repository: adding through the service
+    # needs the catalogue, which is down in this test.
+    repository.insert_song_item(show_id, 1, 7)
+    repository.insert_break_item(show_id, 2, "Rest", 60)
+    overview = service.show_overview(repository.get_show(show_id))
+    assert overview["catalogue_available"] is False
+    items = overview["items"]
+    assert [item["position"] for item in items] == [1, 2]
+    assert items[0]["song_id"] == 7
+    assert items[0]["song"] is None
+    assert items[1]["break_label"] == "Rest"
+    assert overview["total_seconds"] is None
+    assert overview["problems"] is None
+    assert overview["songs"] == []
+
+
+@pytest.mark.usefixtures("database", "catalogue_down")
+def test_add_song_is_refused_when_the_catalogue_is_down():
+    show_id = create_show()
+    assert service.add_song_to_setlist(show_id, 7) == [service.CATALOGUE_DOWN_ADD_SONG]
+    assert repository.list_items(show_id) == []
