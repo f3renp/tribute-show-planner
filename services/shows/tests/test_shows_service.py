@@ -38,7 +38,9 @@ def test_empty_show_form_reports_every_problem_at_once():
     "field, value",
     [
         ("name", " "),
+        ("name", "x" * 201),
         ("venue", ""),
+        ("venue", "x" * 201),
         ("show_date", "31/10/2026"),
         ("show_date", "2026-02-30"),
         ("max_minutes", "0"),
@@ -61,6 +63,7 @@ def test_valid_break():
     "form",
     [
         {"break_label": "", "break_seconds": "120"},
+        {"break_label": "x" * 101, "break_seconds": "120"},
         {"break_label": "Rest", "break_seconds": "0"},
         {"break_label": "Rest", "break_seconds": "1801"},
         {"break_label": "Rest", "break_seconds": "two"},

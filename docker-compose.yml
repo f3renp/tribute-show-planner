@@ -73,13 +73,16 @@ services:
       # Service-to-service call on the compose network, by service name.
       CATALOGUE_URL: http://catalogue:8000
       CATALOGUE_PUBLIC_URL: ${CATALOGUE_PUBLIC_URL:-http://localhost:8001}
-    volumes:
-      - shows-data:/data
+      # Same LOCAL-ONLY default password that db-init gives shows_app.
+      DATABASE_URL: mssql://shows_app:${SHOWS_DB_PASSWORD:-LocalOnly_Shows_2026!}@sqlserver:1433/shows
     depends_on:
+      db-init:
+        # Its own database and login must exist before it starts.
+        condition: service_completed_successfully
       catalogue:
         # Wait for the catalogue's HEALTHCHECK (GET /health) to pass.
         condition: service_healthy
 
 volumes:
+  # The only volume: both services' databases live in this SQL Server.
   sqlserver-data:
-  shows-data:

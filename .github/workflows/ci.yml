@@ -37,8 +37,15 @@ jobs:
       - name: Start SQL Server and create the databases
         working-directory: .
         run: docker compose run --rm db-init
+      # Each matrix job uses its own login and its own *_test database.
       - name: Point the tests at the test database
-        run: echo "TEST_DATABASE_URL=mssql://catalogue_app:${CATALOGUE_DB_PASSWORD}@127.0.0.1:1433/catalogue_test" >> "$GITHUB_ENV"
+        run: |
+          if [ "${{ matrix.service }}" = "catalogue" ]; then
+            password="$CATALOGUE_DB_PASSWORD"
+          else
+            password="$SHOWS_DB_PASSWORD"
+          fi
+          echo "TEST_DATABASE_URL=mssql://${{ matrix.service }}_app:${password}@127.0.0.1:1433/${{ matrix.service }}_test" >> "$GITHUB_ENV"
       - run: pip install -r requirements-dev.txt
       - run: python -m pytest
 

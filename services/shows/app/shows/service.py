@@ -18,6 +18,12 @@ MAX_SHOW_MINUTES = 4 * 60
 # A break longer than 30 minutes is an interval, not a break in the set.
 MAX_BREAK_SECONDS = 30 * 60
 
+# Sizes of the NVARCHAR columns in migrations/001_init.sql. Longer text
+# would be refused by SQL Server, so the form reports it first.
+MAX_NAME_LENGTH = 200
+MAX_VENUE_LENGTH = 200
+MAX_BREAK_LABEL_LENGTH = 100
+
 DIRECTIONS = ("up", "down")
 
 # A song cannot be checked (exists? retired?) without the catalogue, so it
@@ -47,10 +53,14 @@ def validate_show(form):
     name = form.get("name", "").strip()
     if not name:
         errors.append("Name is required.")
+    elif len(name) > MAX_NAME_LENGTH:
+        errors.append(f"Name must be at most {MAX_NAME_LENGTH} characters.")
 
     venue = form.get("venue", "").strip()
     if not venue:
         errors.append("Venue is required.")
+    elif len(venue) > MAX_VENUE_LENGTH:
+        errors.append(f"Venue must be at most {MAX_VENUE_LENGTH} characters.")
 
     show_date = form.get("show_date", "").strip()
     try:
@@ -78,6 +88,8 @@ def validate_break(form):
     label = form.get("break_label", "").strip()
     if not label:
         errors.append("Break label is required.")
+    elif len(label) > MAX_BREAK_LABEL_LENGTH:
+        errors.append(f"Break label must be at most {MAX_BREAK_LABEL_LENGTH} characters.")
 
     seconds = parse_whole_number(form.get("break_seconds", ""))
     if seconds is None or not 1 <= seconds <= MAX_BREAK_SECONDS:
