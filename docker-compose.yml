@@ -1,7 +1,55 @@
 # Runs both services: docker compose up --build
 # Catalogue: http://localhost:8001   Shows: http://localhost:8002
 # Optional settings come from a .env file next to this one (see .env.example).
+#
+# Passwords: the ${VAR:-default} values below are LOCAL-ONLY defaults, so a
+# clean clone starts with no extra step. They protect a throwaway container on
+# this machine and are never used on Azure; the Azure passwords live only in
+# GitHub Actions secrets. Override them in a git-ignored .env if you like.
 services:
+  # One SQL Server holding one database per service (created by db-init).
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:-LocalOnly_Sa_2026!}
+    ports:
+      # Published so the tests run on the laptop (uv run python -m pytest)
+      # can reach this server. Bound to 127.0.0.1 so only this machine can
+      # connect, not other devices on the network.
+      - "127.0.0.1:1433:1433"
+    volumes:
+      - sqlserver-data:/var/opt/mssql
+    healthcheck:
+      # Healthy once sa can log in and run a query. $$ stops compose from
+      # filling in the variable, so the container's shell reads it instead.
+      # -C trusts the server's self-signed certificate.
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -C -b -Q \"SELECT 1\" -o /dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  # One-off job: runs db/init.sql once SQL Server is healthy, then exits.
+  # The script is idempotent, so running it on every "up" is safe.
+  db-init:
+    # Same image only because it already contains sqlcmd.
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    environment:
+      # sqlcmd reads the -U user's password from SQLCMDPASSWORD.
+      SQLCMDPASSWORD: ${MSSQL_SA_PASSWORD:-LocalOnly_Sa_2026!}
+      # sqlcmd turns environment variables into $(NAME) variables in the script.
+      CATALOGUE_DB_PASSWORD: ${CATALOGUE_DB_PASSWORD:-LocalOnly_Catalogue_2026!}
+      SHOWS_DB_PASSWORD: ${SHOWS_DB_PASSWORD:-LocalOnly_Shows_2026!}
+    volumes:
+      - ./db:/db:ro
+    # -b: stop with a non-zero exit code on the first SQL error.
+    entrypoint: ["/opt/mssql-tools18/bin/sqlcmd", "-S", "sqlserver", "-U", "sa", "-C", "-b", "-i", "/db/init.sql"]
+    restart: "no"
+
   catalogue:
     build: ./services/catalogue
     ports:
@@ -27,5 +75,6 @@ services:
         condition: service_healthy
 
 volumes:
+  sqlserver-data:
   catalogue-data:
   shows-data:
