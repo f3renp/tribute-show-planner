@@ -7,7 +7,7 @@ from flask import Flask, redirect, url_for
 from waitress import serve
 
 import config
-import db
+import migrate
 import seed
 from catalogue.api import bp as api_bp
 from catalogue.routes import bp as catalogue_bp
@@ -15,9 +15,12 @@ from request_log import log_requests
 
 
 def create_app():
-    """Create missing tables, add the demo catalogue if it is empty, then
-    build and return the Flask app."""
-    db.init_db()
+    """Apply pending migrations, add the demo catalogue if it is empty, then
+    build and return the Flask app.
+
+    Seeding runs after the migrations, so the tables it fills exist.
+    """
+    migrate.apply_migrations()
     seed.seed_demo_catalogue()
     app = Flask(__name__)
     log_requests(app)

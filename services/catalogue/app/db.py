@@ -1,54 +1,121 @@
-"""Opening SQLite connections and creating the tables at startup."""
-import os
-import sqlite3
+"""Connections to the catalogue's SQL Server database, and small helpers to
+run SQL. Only this file talks to pymssql.
+
+SQL uses pymssql's markers: %s for a value from a tuple, %(name)s for a
+value from a dict. pymssql fills them in safely (no SQL injection).
+"""
+import sys
+import time
+from urllib.parse import unquote, urlsplit
+
+import pymssql
 
 import config
 
-SCHEMA_PATH = os.path.join(os.path.dirname(__file__), "schema.sql")
+# Wait before the next attempt: 1 s, then twice as long each time, at most 15 s.
+FIRST_RETRY_DELAY_SECONDS = 1
+MAX_RETRY_DELAY_SECONDS = 15
 
 
-def get_connection():
-    """Open a connection to the database file in config.DATABASE_PATH."""
-    connection = sqlite3.connect(config.DATABASE_PATH)
-    # Rows can be read by column name: row["title"] instead of row[1].
-    connection.row_factory = sqlite3.Row
-    # SQLite ignores REFERENCES unless this is switched on per connection.
-    connection.execute("PRAGMA foreign_keys = ON")
-    return connection
+def log(message):
+    """Print one line to stdout, where Docker and Azure collect the logs."""
+    sys.stdout.write(message + "\n")
+    sys.stdout.flush()
 
 
-def fetch_all(sql, params=()):
+def parse_database_url(url):
+    """Split mssql://user:password@host:port/database into connect() arguments.
+
+    The error message never repeats the URL, because it holds the password.
+    User and password may be URL-encoded (%40 for @).
+    """
+    parts = urlsplit(url)
+    database = parts.path.lstrip("/")
+    if parts.scheme != "mssql" or not parts.hostname or not database:
+        raise ValueError(
+            "DATABASE_URL must be set and look like "
+            "mssql://user:password@host:1433/database"
+        )
+    return {
+        "server": parts.hostname,
+        "port": parts.port or 1433,
+        "user": unquote(parts.username or ""),
+        "password": unquote(parts.password or ""),
+        "database": database,
+    }
+
+
+def retry_delay(attempt):
+    """Seconds to wait after failed attempt number `attempt` (1, 2, 3, ...)."""
+    return min(FIRST_RETRY_DELAY_SECONDS * 2 ** (attempt - 1), MAX_RETRY_DELAY_SECONDS)
+
+
+def error_code(error):
+    """The SQL Server or driver error number, e.g. 40613 (database paused)."""
+    return error.args[0] if error.args else "unknown"
+
+
+def get_connection(attempts=None):
+    """Open a connection, retrying with backoff while the server refuses it.
+
+    SQL Server may still be starting (docker compose) or the Azure database
+    may be resuming from auto-pause (error 40613). Both refuse connections
+    for a while and then work. After the last attempt the error is raised.
+    """
+    if attempts is None:
+        attempts = config.DB_CONNECT_ATTEMPTS
+    settings = parse_database_url(config.DATABASE_URL)
+    for attempt in range(1, attempts + 1):
+        try:
+            return pymssql.connect(
+                **settings, login_timeout=config.DB_LOGIN_TIMEOUT_SECONDS
+            )
+        except pymssql.OperationalError as error:
+            if attempt == attempts:
+                raise
+            delay = retry_delay(attempt)
+            log(
+                f"database not reachable (error {error_code(error)}, attempt "
+                f"{attempt}/{attempts}), retrying in {delay}s"
+            )
+            time.sleep(delay)
+
+
+def fetch_all(sql, params=None):
     """Run a SELECT and return every row as a dict."""
     connection = get_connection()
     try:
-        rows = connection.execute(sql, params).fetchall()
+        cursor = connection.cursor(as_dict=True)
+        cursor.execute(sql, params)
+        return cursor.fetchall()
     finally:
         connection.close()
-    return [dict(row) for row in rows]
 
 
-def fetch_one(sql, params=()):
+def fetch_one(sql, params=None):
     """Run a SELECT and return the first row as a dict, or None."""
     rows = fetch_all(sql, params)
     return rows[0] if rows else None
 
 
-def execute(sql, params=()):
-    """Run an INSERT or UPDATE, save it, and return the new row's id."""
+def execute(sql, params=None):
+    """Run an UPDATE, DELETE or DDL statement and save it."""
     connection = get_connection()
     try:
-        cursor = connection.execute(sql, params)
+        connection.cursor().execute(sql, params)
         connection.commit()
     finally:
         connection.close()
-    return cursor.lastrowid
 
 
-def init_db():
-    """Create the data folder and any missing tables from schema.sql."""
-    os.makedirs(os.path.dirname(config.DATABASE_PATH), exist_ok=True)
-    with open(SCHEMA_PATH, encoding="utf-8") as schema_file:
-        schema = schema_file.read()
+def insert(sql, params=None):
+    """Run an INSERT that ends in OUTPUT INSERTED.id, save it, return the id."""
     connection = get_connection()
-    connection.executescript(schema)
-    connection.close()
+    try:
+        cursor = connection.cursor(as_dict=True)
+        cursor.execute(sql, params)
+        new_id = cursor.fetchone()["id"]
+        connection.commit()
+    finally:
+        connection.close()
+    return new_id

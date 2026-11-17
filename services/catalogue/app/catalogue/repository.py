@@ -1,4 +1,7 @@
-"""SQL for the catalogue tables. Only this file reads or writes songs and outfits."""
+"""SQL for the catalogue tables. Only this file reads or writes songs and outfits.
+
+%s takes a value from a tuple, %(name)s from a dict (pymssql's markers).
+"""
 import db
 
 # Songs ------------------------------------------------------------------
@@ -19,15 +22,15 @@ def list_songs():
 
 def get_song(song_id):
     """One song as a dict, or None if the id does not exist."""
-    return db.fetch_one("SELECT * FROM songs WHERE id = ?", (song_id,))
+    return db.fetch_one("SELECT * FROM songs WHERE id = %s", (song_id,))
 
 
 def get_songs_with_outfits(song_ids):
     """The songs with these ids, each with its outfit name and change time."""
     if not song_ids:
         return []
-    # One "?" per id, e.g. "?, ?, ?" for three ids.
-    placeholders = ", ".join("?" for _ in song_ids)
+    # One "%s" per id, e.g. "%s, %s, %s" for three ids.
+    placeholders = ", ".join("%s" for _ in song_ids)
     return db.fetch_all(
         f"""
         SELECT songs.id, title, album, year, duration_seconds, energy, kind,
@@ -44,16 +47,19 @@ def get_songs_with_outfits(song_ids):
 def find_song_by_title_and_album(title, album):
     """The song with this title and album, or None."""
     return db.fetch_one(
-        "SELECT * FROM songs WHERE title = ? AND album = ?", (title, album)
+        "SELECT * FROM songs WHERE title = %s AND album = %s", (title, album)
     )
 
 
 def insert_song(song):
     """Save a new song and return its id. song uses the column names as keys."""
-    return db.execute(
+    # OUTPUT INSERTED.id returns the id SQL Server gave the new row.
+    return db.insert(
         """
         INSERT INTO songs (title, album, year, duration_seconds, energy, kind, outfit_id)
-        VALUES (:title, :album, :year, :duration_seconds, :energy, :kind, :outfit_id)
+        OUTPUT INSERTED.id
+        VALUES (%(title)s, %(album)s, %(year)s, %(duration_seconds)s,
+                %(energy)s, %(kind)s, %(outfit_id)s)
         """,
         song,
     )
@@ -64,10 +70,10 @@ def update_song(song_id, song):
     db.execute(
         """
         UPDATE songs
-        SET title = :title, album = :album, year = :year,
-            duration_seconds = :duration_seconds, energy = :energy,
-            kind = :kind, outfit_id = :outfit_id
-        WHERE id = :id
+        SET title = %(title)s, album = %(album)s, year = %(year)s,
+            duration_seconds = %(duration_seconds)s, energy = %(energy)s,
+            kind = %(kind)s, outfit_id = %(outfit_id)s
+        WHERE id = %(id)s
         """,
         dict(song, id=song_id),
     )
@@ -76,7 +82,7 @@ def update_song(song_id, song):
 def set_song_active(song_id, active):
     """Mark a song as active (True) or retired (False)."""
     db.execute(
-        "UPDATE songs SET active = ? WHERE id = ?", (int(active), song_id)
+        "UPDATE songs SET active = %s WHERE id = %s", (int(active), song_id)
     )
 
 
@@ -90,17 +96,21 @@ def list_outfits():
 
 def get_outfit(outfit_id):
     """One outfit as a dict, or None if the id does not exist."""
-    return db.fetch_one("SELECT * FROM outfits WHERE id = ?", (outfit_id,))
+    return db.fetch_one("SELECT * FROM outfits WHERE id = %s", (outfit_id,))
 
 
 def find_outfit_by_name(name):
     """The outfit with this name, or None."""
-    return db.fetch_one("SELECT * FROM outfits WHERE name = ?", (name,))
+    return db.fetch_one("SELECT * FROM outfits WHERE name = %s", (name,))
 
 
 def insert_outfit(outfit):
     """Save a new outfit and return its id."""
-    return db.execute(
-        "INSERT INTO outfits (name, change_seconds) VALUES (:name, :change_seconds)",
+    return db.insert(
+        """
+        INSERT INTO outfits (name, change_seconds)
+        OUTPUT INSERTED.id
+        VALUES (%(name)s, %(change_seconds)s)
+        """,
         outfit,
     )
