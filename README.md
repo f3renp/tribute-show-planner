@@ -12,8 +12,8 @@ SQLite database (ADR-6 in `ADR.md`):
 - **Catalogue** (`services/catalogue/`): songs and outfits, as a JSON API
   at http://localhost:8001/api/. Owns the `outfits` and `songs` tables.
 - **Shows** (`services/shows/`): shows, ordered setlists and the setlist
-  checks (`shows/rules.py`), at http://localhost:8002/shows/. Owns the
-  `shows` and `setlist_items` tables.
+  checks (`shows/rules.py`), as a JSON API at http://localhost:8002/api/.
+  Owns the `shows` and `setlist_items` tables.
 
 The shows service gets song details only from the catalogue's JSON API,
 over HTTP:
@@ -40,6 +40,25 @@ at once), 404 for an unknown id, 409 for removing an outfit songs use.
 | `PUT /api/outfits/{id}` | The saved outfit, 400 or 404 |
 | `DELETE /api/outfits/{id}` | 204, 404, or 409 if songs (also retired ones) use it |
 
+The shows API, also for the browser, with the same error shape. Every
+change to a setlist answers with the show's new **overview**: the show,
+its setlist with song details, the running time and the check results.
+If the catalogue is down, the overview is still 200, with
+`catalogue_available: false`, song details `null` and the checks skipped
+(`problems: null`); adding a song is then refused with 503.
+
+| Endpoint | Returns |
+|----------|---------|
+| `GET /api/shows` | Every show, soonest first |
+| `POST /api/shows` | 201 and the new show, or 400 |
+| `GET /api/shows/{id}` | The overview, or 404 |
+| `PUT /api/shows/{id}` | The new overview, 400 or 404 |
+| `DELETE /api/shows/{id}` | 204 (its setlist is deleted too) or 404 |
+| `POST /api/shows/{id}/songs` | 201 and the overview, 400, 404, or 503 if the catalogue is down |
+| `POST /api/shows/{id}/breaks` | 201 and the overview, 400 or 404 |
+| `POST /api/shows/{id}/items/{item_id}/move` | `{"direction": "up"}` or `"down"`: the overview, 400 or 404 |
+| `DELETE /api/shows/{id}/items/{item_id}` | The overview, or 404 |
+
 ## Run locally
 
 You need Docker with Docker Compose. From the repository root:
@@ -48,8 +67,9 @@ You need Docker with Docker Compose. From the repository root:
 docker compose up --build
 ```
 
-Then open http://localhost:8001 (catalogue) or http://localhost:8002
-(shows). Stop with Ctrl+C. `docker compose down` removes the containers;
+The JSON APIs are then at http://localhost:8001/api/ (catalogue) and
+http://localhost:8002/api/ (shows), e.g. http://localhost:8001/api/songs/all.
+Stop with Ctrl+C. `docker compose down` removes the containers;
 the data stays in the `sqlserver-data` volume until you run
 `docker compose down -v`.
 
@@ -90,8 +110,7 @@ lists the ones you may want to change.
 | `DB_LOGIN_TIMEOUT_SECONDS` | both | `10` | Seconds one connection attempt may take. |
 | `CATALOGUE_URL` | shows | `http://localhost:8001` | Where shows calls the catalogue API. Compose sets `http://catalogue:8000`. |
 | `CATALOGUE_TIMEOUT` | shows | `5` | Seconds to wait for the catalogue. |
-| `CATALOGUE_PUBLIC_URL` | shows | `http://localhost:8001` | Catalogue address for links in the browser. |
-| `CORS_ORIGINS` | catalogue | `http://localhost:8080` | Comma-separated origins whose pages may call the API from the browser. Empty allows none. |
+| `CORS_ORIGINS` | both | `http://localhost:8080` | Comma-separated origins whose pages may call the API from the browser. Empty allows none. |
 
 ## Tests and coverage
 
@@ -114,15 +133,16 @@ pip install -r requirements-dev.txt
 python -m pytest --cov=app --cov-report=term-missing
 ```
 
-Result on 2026-11-10:
+Result on 2026-11-18:
 
 | Service | Tests | Coverage |
 |---------|-------|----------|
-| catalogue | 81 passed | 87% |
-| shows | 74 passed | 88% |
+| catalogue | 149 passed | 99% |
+| shows | 150 passed | 99% |
 
-The routes are still mostly untested on purpose: they hold no rules and
-only call the services. See ADR-4 in `ADR.md`.
+Since the pages became JSON APIs (18 Nov), each service's `tests/test_api.py`
+tests every endpoint and status code through Flask's test client, so
+`api.py` is covered too, not only the rules and services (ADR-4).
 
 ## Assignment 1 container contract check (§7)
 
@@ -184,12 +204,11 @@ Notes:
 - `services/catalogue/app/catalogue/`: `api.py` (the JSON API, for the
   browser and the shows service), `service.py` (rules and validation),
   `repository.py` (SQL).
-- `services/catalogue/app/cors.py`: the CORS headers for `CORS_ORIGINS`.
-- `services/shows/app/shows/`: `routes.py`, `service.py`, `repository.py`,
-  `rules.py` (the six setlist checks) and `catalogue_client.py` (the HTTP
-  calls to the catalogue).
-- `services/shows/app/templates/`, `static/`: HTML templates, CSS and a
-  little JavaScript.
+- `services/shows/app/shows/`: `api.py` (the JSON API), `service.py`,
+  `repository.py`, `rules.py` (the six setlist checks) and
+  `catalogue_client.py` (the HTTP calls to the catalogue).
+- `services/<name>/app/cors.py`: the CORS headers for `CORS_ORIGINS`
+  (the same file in both services).
 - `docs/diagrams.md`: architecture and database diagrams (still show the
   single-app version).
 - `ADR.md`: architecture decisions. `AI_USAGE.md`: AI usage log.

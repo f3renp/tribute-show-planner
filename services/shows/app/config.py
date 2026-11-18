@@ -35,6 +35,12 @@ CATALOGUE_URL = os.environ.get("CATALOGUE_URL", "http://localhost:8001")
 # Seconds to wait for the catalogue before giving up on a request.
 CATALOGUE_TIMEOUT = float(os.environ.get("CATALOGUE_TIMEOUT", "5"))
 
-# Address of the catalogue as the browser sees it, for the "Songs" and
-# "Outfits" links. Not the same as CATALOGUE_URL inside docker compose.
-CATALOGUE_PUBLIC_URL = os.environ.get("CATALOGUE_PUBLIC_URL", "http://localhost:8001")
+# Origins (scheme://host:port, no trailing slash) whose pages may call this
+# API from the browser, separated by commas. The default is the UI served
+# by nginx in docker compose. On Azure the pipeline sets the Storage static
+# website's origin. Empty means no browser page may call it (cors.py).
+CORS_ORIGINS = [
+    origin.strip()
+    for origin in os.environ.get("CORS_ORIGINS", "http://localhost:8080").split(",")
+    if origin.strip()
+]

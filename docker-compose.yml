@@ -71,7 +71,6 @@ services:
     environment:
       # Service-to-service call on the compose network, by service name.
       CATALOGUE_URL: http://catalogue:8000
-      CATALOGUE_PUBLIC_URL: ${CATALOGUE_PUBLIC_URL:-http://localhost:8001}
       # Same LOCAL-ONLY default password that db-init gives shows_app.
       DATABASE_URL: mssql://shows_app:${SHOWS_DB_PASSWORD:-LocalOnly_Shows_2026!}@sqlserver:1433/shows
     depends_on:

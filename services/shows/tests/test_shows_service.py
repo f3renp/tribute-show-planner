@@ -7,6 +7,7 @@ no test calls the real catalogue over HTTP.
 """
 import pytest
 
+import db
 from shows import repository, service
 
 
@@ -161,6 +162,53 @@ def test_create_show_with_errors_saves_nothing(catalogue):
 
 
 @pytest.mark.usefixtures("database")
+def test_edit_show_saves_the_changes_and_keeps_the_setlist(catalogue):
+    show_id = create_show()
+    service.add_song_to_setlist(show_id, add_song(catalogue, "Billie Jean"))
+    form = dict(valid_show_form(), venue="Palau Sant Jordi", max_minutes="120")
+    assert service.edit_show(show_id, form) == []
+    show = repository.get_show(show_id)
+    assert show["venue"] == "Palau Sant Jordi"
+    assert show["max_minutes"] == 120
+    assert item_labels(show_id) == ["Billie Jean"]
+
+
+@pytest.mark.usefixtures("database")
+def test_edit_show_with_errors_saves_nothing(catalogue):
+    show_id = create_show()
+    errors = service.edit_show(show_id, dict(valid_show_form(), max_minutes="0"))
+    assert errors == ["Length must be between 1 and 240 minutes."]
+    assert repository.get_show(show_id)["max_minutes"] == 90
+
+
+@pytest.mark.usefixtures("database")
+def test_delete_show_removes_its_setlist_items_too(catalogue):
+    show_id = create_show()
+    other_show_id = create_show()
+    service.add_song_to_setlist(show_id, add_song(catalogue, "Billie Jean"))
+    service.add_break_to_setlist(show_id, {"break_label": "Rest", "break_seconds": "60"})
+    service.add_song_to_setlist(other_show_id, add_song(catalogue, "Beat It"))
+    service.delete_show(show_id)
+    assert repository.get_show(show_id) is None
+    # ON DELETE CASCADE removed them; nothing else may still point at the show.
+    assert db.fetch_all(
+        "SELECT id FROM setlist_items WHERE show_id = %s", (show_id,)
+    ) == []
+    assert item_labels(other_show_id) == ["Beat It"]
+
+
+@pytest.mark.usefixtures("database")
+def test_is_item_in_show_only_for_that_shows_items(catalogue):
+    show_id = create_show()
+    other_show_id = create_show()
+    service.add_break_to_setlist(show_id, {"break_label": "Rest", "break_seconds": "60"})
+    item_id = repository.list_items(show_id)[0]["id"]
+    assert service.is_item_in_show(show_id, item_id) is True
+    assert service.is_item_in_show(other_show_id, item_id) is False
+    assert service.is_item_in_show(show_id, 9999) is False
+
+
+@pytest.mark.usefixtures("database")
 def test_songs_and_breaks_are_added_at_the_end_in_order(catalogue):
     show_id = create_show()
     assert service.add_song_to_setlist(show_id, add_song(catalogue, "Billie Jean")) == []
@@ -264,6 +312,7 @@ def test_show_loads_degraded_when_the_catalogue_is_down():
     assert items[0]["song"] is None
     assert items[1]["break_label"] == "Rest"
     assert overview["total_seconds"] is None
+    assert overview["over_limit"] is None
     assert overview["problems"] is None
     assert overview["songs"] == []
 

@@ -32,6 +32,25 @@ def insert_show(show):
     )
 
 
+def update_show(show_id, show):
+    """Overwrite the details of an existing show. Its setlist is not touched."""
+    db.execute(
+        """
+        UPDATE shows
+        SET name = %(name)s, venue = %(venue)s, show_date = %(show_date)s,
+            max_minutes = %(max_minutes)s
+        WHERE id = %(id)s
+        """,
+        dict(show, id=show_id),
+    )
+
+
+def delete_show(show_id):
+    """Delete a show. fk_setlist_items_show has ON DELETE CASCADE, so SQL
+    Server deletes its setlist items in the same statement."""
+    db.execute("DELETE FROM shows WHERE id = %s", (show_id,))
+
+
 # Setlist items ----------------------------------------------------------
 
 
