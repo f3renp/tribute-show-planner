@@ -315,16 +315,37 @@ form.stacked > button,
   font-style: italic;
 }
 
-/* A service did not answer: the message and a "Try again" button. */
+/* A service did not answer: the message and a "Try again" button.
+   A wrapping flex row: on a narrow window the button moves under the
+   text instead of running outside the card. */
 .service-down {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1rem;
+  box-sizing: border-box;
+  max-width: 100%;
   padding: 0.9rem 1.2rem;
   border-radius: 4px;
   border-left: 5px solid var(--gold);
   background: var(--gold-light);
 }
 
+/* hidden must win over display: flex above. */
+.service-down[hidden] {
+  display: none;
+}
+
+/* The text takes the room left and may shrink below its natural width
+   (min-width: 0), wrapping long words if it must. */
+.service-down span {
+  flex: 1 1 16rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .service-down button {
-  margin-left: 1rem;
+  flex: none;
 }
 
 /* Why a button is disabled, e.g. "used by 3 songs". */
