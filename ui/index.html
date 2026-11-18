@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Songs - Tribute Show Planner</title>
+  <link rel="stylesheet" href="style.css">
+  <!-- defer: run in this order once the page is parsed. -->
+  <script src="config.js" defer></script>
+  <script src="js/api.js" defer></script>
+  <script src="js/shouts.js" defer></script>
+  <script src="js/songs.js" defer></script>
+</head>
+<body>
+  <header>
+    <strong>Tribute Show Planner</strong>
+    <nav>
+      <a href="index.html">Songs</a>
+      <a href="outfits.html">Outfits</a>
+      <a href="shows.html">Shows</a>
+    </nav>
+  </header>
+  <main>
+    <h1>Songs</h1>
+    <p><a class="button" href="song.html">Add a song</a></p>
+
+    <p id="loading" class="loading">Loading...</p>
+    <div id="page-error" class="service-down" role="alert" hidden></div>
+    <ul id="errors" class="errors" role="alert" hidden></ul>
+
+    <p id="no-songs" hidden>No songs yet.</p>
+    <table id="songs" hidden>
+      <thead>
+        <tr>
+          <th>Title</th><th>Album</th><th>Year</th><th>Duration</th>
+          <th>Energy</th><th>Kind</th><th>Outfit</th><th>Status</th><th></th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </main>
+</body>
+</html>

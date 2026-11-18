@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Shows - Tribute Show Planner</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="config.js" defer></script>
+  <script src="js/api.js" defer></script>
+  <script src="js/shouts.js" defer></script>
+  <script src="js/shows.js" defer></script>
+</head>
+<body>
+  <header>
+    <strong>Tribute Show Planner</strong>
+    <nav>
+      <a href="index.html">Songs</a>
+      <a href="outfits.html">Outfits</a>
+      <a href="shows.html">Shows</a>
+    </nav>
+  </header>
+  <main>
+    <h1>Shows</h1>
+
+    <p id="loading" class="loading">Loading...</p>
+    <div id="page-error" class="service-down" role="alert" hidden></div>
+
+    <p id="no-shows" hidden>No shows yet.</p>
+    <table id="shows" hidden>
+      <thead>
+        <tr><th>Name</th><th>Venue</th><th>Date</th><th>Length (minutes)</th></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+
+    <h2>Plan a show</h2>
+    <form id="show-form" class="stacked">
+      <ul id="errors" class="errors" role="alert" hidden></ul>
+      <label>Name <input name="name"></label>
+      <label>Venue <input name="venue"></label>
+      <label>Date <input type="date" name="show_date"></label>
+      <label>Length (minutes) <input name="max_minutes"></label>
+      <button>Create show</button>
+    </form>
+  </main>
+</body>
+</html>

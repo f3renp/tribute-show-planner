@@ -45,8 +45,9 @@ def parse_whole_number(text):
 def validate_show(form):
     """Check a submitted show form and return (show, errors).
 
-    form is a dict of strings, as it arrives from an HTML form. show_date
-    must be YYYY-MM-DD, which is what <input type="date"> sends.
+    form is a dict of strings (api.py turns the JSON values into text, so
+    90 and "90" are checked the same way). show_date must be YYYY-MM-DD,
+    which is what <input type="date"> gives.
     """
     errors = []
 
@@ -149,7 +150,8 @@ def show_overview(show):
     setlist (positions, breaks, song ids) comes from our own database, but
     song details are None, the running time is unknown, the checks are
     skipped (problems is None, not an empty list, which would mean "no
-    problems") and there are no songs to choose from.
+    problems"; over_limit is None, not False, which would mean "within the
+    limit") and there are no songs to choose from.
     """
     items = repository.list_items(show["id"])
     try:
@@ -160,7 +162,7 @@ def show_overview(show):
             "catalogue_available": False,
             "items": attach_songs(items, {}),
             "total_seconds": None,
-            "over_limit": False,
+            "over_limit": None,
             "problems": None,
             "songs": [],
         }
@@ -188,6 +190,24 @@ def create_show(form):
     if errors:
         return None, errors
     return repository.insert_show(show), []
+
+
+def edit_show(show_id, form):
+    """Validate an edited show form and save it. Return the errors, empty if saved."""
+    show, errors = validate_show(form)
+    if not errors:
+        repository.update_show(show_id, show)
+    return errors
+
+
+def delete_show(show_id):
+    """Delete a show and, through ON DELETE CASCADE, its whole setlist."""
+    repository.delete_show(show_id)
+
+
+def is_item_in_show(show_id, item_id):
+    """True if item_id is one of this show's setlist items."""
+    return any(item["id"] == item_id for item in repository.list_items(show_id))
 
 
 def add_song_to_setlist(show_id, song_id):

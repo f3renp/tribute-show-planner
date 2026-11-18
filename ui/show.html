@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Show - Tribute Show Planner</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="config.js" defer></script>
+  <script src="js/api.js" defer></script>
+  <script src="js/shouts.js" defer></script>
+  <script src="js/show.js" defer></script>
+</head>
+<body>
+  <header>
+    <strong>Tribute Show Planner</strong>
+    <nav>
+      <a href="index.html">Songs</a>
+      <a href="outfits.html">Outfits</a>
+      <a href="shows.html">Shows</a>
+    </nav>
+  </header>
+  <main>
+    <!-- show.html?id=4 is show 4. Every change redraws the page from the
+         overview the shows service answers with. -->
+    <h1 id="show-name">Show</h1>
+
+    <p id="loading" class="loading">Loading...</p>
+    <div id="page-error" class="service-down" role="alert" hidden></div>
+
+    <div id="content" hidden>
+      <p id="show-facts" class="show-facts"></p>
+
+      <details id="edit-details">
+        <summary>Edit show</summary>
+        <form id="edit-form" class="stacked">
+          <ul id="edit-errors" class="errors" role="alert" hidden></ul>
+          <label>Name <input name="name"></label>
+          <label>Venue <input name="venue"></label>
+          <label>Date <input type="date" name="show_date"></label>
+          <label>Length (minutes) <input name="max_minutes"></label>
+          <div class="form-buttons">
+            <button>Save</button>
+            <button id="delete-show" type="button">Delete show</button>
+          </div>
+        </form>
+      </details>
+
+      <p id="catalogue-down" class="catalogue-down" role="alert" hidden>
+        Catalogue service unavailable. The setlist is shown without song details,
+        the checks are skipped and songs cannot be added. Try again later.
+      </p>
+
+      <h2>Setlist</h2>
+      <ul id="setlist-errors" class="errors" role="alert" hidden></ul>
+      <p id="empty-setlist" hidden>The setlist is empty.</p>
+      <div id="setlist-results" hidden>
+        <table id="setlist">
+          <thead>
+            <tr><th>#</th><th>Item</th><th>Duration</th><th>Energy</th><th>Kind</th><th>Outfit</th><th></th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+        <p id="running-time" class="running-time"></p>
+
+        <h2>Checks</h2>
+        <div id="checks"></div>
+      </div>
+
+      <h2>Add a song</h2>
+      <p id="no-song-picker"></p>
+      <form id="song-form" class="stacked" hidden>
+        <ul id="song-errors" class="errors" role="alert" hidden></ul>
+        <label>Song <select name="song_id"></select></label>
+        <button>Add song</button>
+      </form>
+
+      <h2>Add a break</h2>
+      <form id="break-form" class="stacked">
+        <ul id="break-errors" class="errors" role="alert" hidden></ul>
+        <label>Label <input name="break_label" placeholder="Costume change"></label>
+        <label>Length (seconds) <input name="break_seconds"></label>
+        <button>Add break</button>
+      </form>
+    </div>
+  </main>
+</body>
+</html>

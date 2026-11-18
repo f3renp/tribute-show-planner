@@ -6,14 +6,16 @@ is wrong with that order: running time over the limit, outfit changes
 without a long enough break, poor energy pacing, and retired or repeated
 songs.
 
-It runs as two services, each a Flask app served by waitress with its own
-SQLite database (ADR-6 in `ADR.md`):
+It runs as a static UI (`ui/`: HTML, CSS and plain JavaScript, no build
+step) that calls two services from the browser. Each service is a Flask
+app served by waitress with its own SQL Server database (ADR-6, ADR-7 in
+`ADR.md`):
 
-- **Catalogue** (`services/catalogue/`): songs and outfits, at
-  http://localhost:8001/catalogue/. Owns the `outfits` and `songs` tables.
+- **Catalogue** (`services/catalogue/`): songs and outfits, as a JSON API
+  at http://localhost:8001/api/. Owns the `outfits` and `songs` tables.
 - **Shows** (`services/shows/`): shows, ordered setlists and the setlist
-  checks (`shows/rules.py`), at http://localhost:8002/shows/. Owns the
-  `shows` and `setlist_items` tables.
+  checks (`shows/rules.py`), as a JSON API at http://localhost:8002/api/.
+  Owns the `shows` and `setlist_items` tables.
 
 The shows service gets song details only from the catalogue's JSON API,
 over HTTP:
@@ -24,6 +26,43 @@ over HTTP:
 | `GET /api/songs/active` | The songs that can be added to a setlist |
 | `GET /health` (both services) | `{"status": "ok"}` |
 
+The rest of the catalogue API is for the browser. Errors are
+`{"errors": ["message", ...]}`: 400 for invalid values (every field error
+at once), 404 for an unknown id, 409 for removing an outfit songs use,
+and, in both services, 403 for a change (anything but GET) sent from a
+page on an origin not in `CORS_ORIGINS` (`app/cors.py`).
+
+| Endpoint | Returns |
+|----------|---------|
+| `GET /api/songs/all` | Every song, active first, with `duration` as `"4:54"` |
+| `GET /api/songs/{id}` | One song (404 if unknown) |
+| `POST /api/songs` | 201 and the new song, or 400 |
+| `PUT /api/songs/{id}` | The saved song, 400 or 404 |
+| `POST /api/songs/{id}/retire`, `/reactivate` | The song, or 404 |
+| `GET /api/outfits` | Every outfit, with `song_count` |
+| `POST /api/outfits` | 201 and the new outfit, or 400 |
+| `PUT /api/outfits/{id}` | The saved outfit, 400 or 404 |
+| `DELETE /api/outfits/{id}` | 204, 404, or 409 if songs (also retired ones) use it |
+
+The shows API, also for the browser, with the same error shape. Every
+change to a setlist answers with the show's new **overview**: the show,
+its setlist with song details, the running time and the check results.
+If the catalogue is down, the overview is still 200, with
+`catalogue_available: false`, song details `null` and the checks skipped
+(`problems: null`); adding a song is then refused with 503.
+
+| Endpoint | Returns |
+|----------|---------|
+| `GET /api/shows` | Every show, soonest first |
+| `POST /api/shows` | 201 and the new show, or 400 |
+| `GET /api/shows/{id}` | The overview, or 404 |
+| `PUT /api/shows/{id}` | The new overview, 400 or 404 |
+| `DELETE /api/shows/{id}` | 204 (its setlist is deleted too) or 404 |
+| `POST /api/shows/{id}/songs` | 201 and the overview, 400, 404, or 503 if the catalogue is down |
+| `POST /api/shows/{id}/breaks` | 201 and the overview, 400 or 404 |
+| `POST /api/shows/{id}/items/{item_id}/move` | `{"direction": "up"}` or `"down"`: the overview, 400 or 404 |
+| `DELETE /api/shows/{id}/items/{item_id}` | The overview, or 404 |
+
 ## Run locally
 
 You need Docker with Docker Compose. From the repository root:
@@ -32,8 +71,11 @@ You need Docker with Docker Compose. From the repository root:
 docker compose up --build
 ```
 
-Then open http://localhost:8001 (catalogue) or http://localhost:8002
-(shows). Stop with Ctrl+C. `docker compose down` removes the containers;
+Then open **http://localhost:8080** (the UI, served by a stock
+`nginx:1.27-alpine` with `ui/` mounted read-only). Use `localhost`, not
+`127.0.0.1`: the services only accept browser calls from the origin
+`http://localhost:8080`. The JSON APIs are at http://localhost:8001/api/
+(catalogue) and http://localhost:8002/api/ (shows). Stop with Ctrl+C. `docker compose down` removes the containers;
 the data stays in the `sqlserver-data` volume until you run
 `docker compose down -v`.
 
@@ -74,8 +116,11 @@ lists the ones you may want to change.
 | `DB_LOGIN_TIMEOUT_SECONDS` | both | `10` | Seconds one connection attempt may take. |
 | `CATALOGUE_URL` | shows | `http://localhost:8001` | Where shows calls the catalogue API. Compose sets `http://catalogue:8000`. |
 | `CATALOGUE_TIMEOUT` | shows | `5` | Seconds to wait for the catalogue. |
-| `CATALOGUE_PUBLIC_URL` | shows | `http://localhost:8001` | Catalogue address for links in the browser. |
-| `SHOWS_PUBLIC_URL` | catalogue | `http://localhost:8002` | Shows address for links in the browser. |
+| `CORS_ORIGINS` | both | `http://localhost:8080` | Comma-separated origins whose pages may call the API from the browser. Empty allows none. Compose sets `http://localhost:8080`. |
+
+The UI's only settings are the two service URLs in `ui/config.js`
+(`CATALOGUE_URL` `http://localhost:8001`, `SHOWS_URL`
+`http://localhost:8002`). No other UI file contains a URL.
 
 ## Tests and coverage
 
@@ -98,15 +143,16 @@ pip install -r requirements-dev.txt
 python -m pytest --cov=app --cov-report=term-missing
 ```
 
-Result on 2026-11-10:
+Result on 2026-11-18:
 
 | Service | Tests | Coverage |
 |---------|-------|----------|
-| catalogue | 81 passed | 87% |
-| shows | 74 passed | 88% |
+| catalogue | 153 passed | 99% |
+| shows | 154 passed | 99% |
 
-The routes are still mostly untested on purpose: they hold no rules and
-only call the services. See ADR-4 in `ADR.md`.
+Since the pages became JSON APIs (18 Nov), each service's `tests/test_api.py`
+tests every endpoint and status code through Flask's test client, so
+`api.py` is covered too, not only the rules and services (ADR-4).
 
 ## Assignment 1 container contract check (§7)
 
@@ -154,7 +200,8 @@ Notes:
 
 ## Project files
 
-- `docker-compose.yml`: starts both services, one volume each.
+- `docker-compose.yml`: starts SQL Server, `db-init`, both services and
+  the `ui` web server; one volume (`sqlserver-data`).
 - `.env.example`: the optional settings for compose.
 - `services/<name>/Dockerfile`, `.dockerignore`, `requirements.txt`: how
   each image is built. Only `app/` is copied into the image.
@@ -165,14 +212,19 @@ Notes:
 - `services/<name>/app/db.py` and `schema.sql`: SQLite connections and the
   tables that service owns.
 - `services/catalogue/app/seed.py`: the demo catalogue.
-- `services/catalogue/app/catalogue/`: `routes.py` (pages), `api.py` (JSON
-  for the shows service), `service.py` (rules and validation),
+- `services/catalogue/app/catalogue/`: `api.py` (the JSON API, for the
+  browser and the shows service), `service.py` (rules and validation),
   `repository.py` (SQL).
-- `services/shows/app/shows/`: `routes.py`, `service.py`, `repository.py`,
-  `rules.py` (the six setlist checks) and `catalogue_client.py` (the HTTP
-  calls to the catalogue).
-- `services/<name>/app/templates/`, `static/`: HTML templates, CSS and a
-  little JavaScript.
+- `services/shows/app/shows/`: `api.py` (the JSON API), `service.py`,
+  `repository.py`, `rules.py` (the six setlist checks) and
+  `catalogue_client.py` (the HTTP calls to the catalogue).
+- `services/<name>/app/cors.py`: the CORS headers for `CORS_ORIGINS`
+  (the same file in both services).
+- `ui/`: the static UI. One page per screen (`index.html` songs,
+  `song.html` add/edit song, `outfits.html`, `shows.html`, `show.html`),
+  `style.css`, `config.js` (the service URLs) and `js/`: `api.js` (calls
+  with a 60 s timeout and the error messages, shared by every page), one
+  script per page, and `shouts.js` (the click shouts).
 - `docs/diagrams.md`: architecture and database diagrams (still show the
   single-app version).
 - `ADR.md`: architecture decisions. `AI_USAGE.md`: AI usage log.

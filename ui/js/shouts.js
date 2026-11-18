@@ -1,17 +1,7 @@
-// Small touches for the pages. No rules live here: every setlist check is
-// done in Python, and every page works the same without JavaScript.
+// The click shouts from Assignment 1, unchanged. Only decoration: no rules
+// and no calls to the services live here.
 
-// 1. Ask before actions that are easy to click by mistake.
-// A form with data-confirm="Some question?" only submits if the user
-// clicks OK.
-document.addEventListener("submit", function (event) {
-  var question = event.target.dataset.confirm;
-  if (question && !window.confirm(question)) {
-    event.preventDefault();
-  }
-});
-
-// 2. A shout floats up from the pointer on every click. Text only.
+// A shout floats up from the pointer on every click. Text only.
 var SHOUTS = ["Hee-hee!", "Shamone!", "Pouw!", "Aaow!", "Hoo!", "Dah!"];
 
 // Users who asked their system for less motion get no shouts.

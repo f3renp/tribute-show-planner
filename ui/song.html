@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Song - Tribute Show Planner</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="config.js" defer></script>
+  <script src="js/api.js" defer></script>
+  <script src="js/shouts.js" defer></script>
+  <script src="js/song-form.js" defer></script>
+</head>
+<body>
+  <header>
+    <strong>Tribute Show Planner</strong>
+    <nav>
+      <a href="index.html">Songs</a>
+      <a href="outfits.html">Outfits</a>
+      <a href="shows.html">Shows</a>
+    </nav>
+  </header>
+  <main>
+    <!-- song.html adds a song; song.html?id=7 edits song 7. -->
+    <h1 id="heading">Song</h1>
+
+    <p id="loading" class="loading">Loading...</p>
+    <div id="page-error" class="service-down" role="alert" hidden></div>
+
+    <p id="no-outfits" hidden>Add an <a href="outfits.html">outfit</a> first: every song needs one.</p>
+
+    <form id="song-form" class="stacked" hidden>
+      <ul id="errors" class="errors" role="alert" hidden></ul>
+      <label>Title <input name="title"></label>
+      <label>Album <input name="album"></label>
+      <label>Year <input name="year"></label>
+      <label>Duration (m:ss) <input name="duration" placeholder="4:54"></label>
+      <label>Energy
+        <select name="energy">
+          <option>1</option><option>2</option><option>3</option><option>4</option><option>5</option>
+        </select>
+      </label>
+      <label>Kind
+        <select name="kind">
+          <option>dance</option><option>ballad</option>
+        </select>
+      </label>
+      <label>Outfit <select name="outfit_id"></select></label>
+      <div class="form-buttons">
+        <button>Save</button>
+        <a href="index.html">Cancel</a>
+      </div>
+    </form>
+  </main>
+</body>
+</html>

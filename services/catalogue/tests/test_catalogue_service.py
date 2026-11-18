@@ -1,7 +1,7 @@
-"""Tests for the catalogue functions that save and read through SQLite.
+"""Tests for the catalogue functions that save and read through SQL Server.
 
-Each test starts with an empty temporary database (the database fixture
-in conftest.py).
+Each test starts with an empty catalogue_test database (the database
+fixture in conftest.py).
 """
 import pytest
 
@@ -13,8 +13,9 @@ pytestmark = pytest.mark.usefixtures("database")
 
 def add_outfit(name="Red jacket", change_seconds="90"):
     """Save an outfit and return its id."""
-    assert service.add_outfit({"name": name, "change_seconds": change_seconds}) == []
-    return repository.find_outfit_by_name(name)["id"]
+    outfit_id, errors = service.add_outfit({"name": name, "change_seconds": change_seconds})
+    assert errors == []
+    return outfit_id
 
 
 def song_form(outfit_id, title="Billie Jean", album="Thriller"):
@@ -32,35 +33,109 @@ def song_form(outfit_id, title="Billie Jean", album="Thriller"):
 
 def add_song(outfit_id, title="Billie Jean", album="Thriller"):
     """Save a song and return its id."""
-    assert service.add_song(song_form(outfit_id, title, album)) == []
-    return repository.find_song_by_title_and_album(title, album)["id"]
+    song_id, errors = service.add_song(song_form(outfit_id, title, album))
+    assert errors == []
+    return song_id
 
 
-# Outfits ----------------------------------------------------------------
+# Adding outfits ---------------------------------------------------------
 
 
-def test_add_outfit_saves_it():
+def test_add_outfit_saves_it_and_returns_its_id():
     outfit_id = add_outfit("Red jacket", "90")
+    assert repository.get_outfit(outfit_id)["name"] == "Red jacket"
     assert repository.get_outfit(outfit_id)["change_seconds"] == 90
 
 
 def test_add_outfit_rejects_a_duplicate_name():
     add_outfit("Red jacket")
-    errors = service.add_outfit({"name": "Red jacket", "change_seconds": "30"})
-    assert errors == ["An outfit with this name already exists."]
+    result = service.add_outfit({"name": "Red jacket", "change_seconds": "30"})
+    assert result == (None, ["An outfit with this name already exists."])
     assert len(repository.list_outfits()) == 1
 
 
 def test_add_outfit_with_a_bad_form_saves_nothing():
-    errors = service.add_outfit({"name": "", "change_seconds": "90"})
-    assert errors == ["Name is required."]
+    result = service.add_outfit({"name": "", "change_seconds": "90"})
+    assert result == (None, ["Name is required."])
     assert repository.list_outfits() == []
+
+
+# Editing and removing outfits -------------------------------------------
+
+
+def test_edit_outfit_saves_the_changes():
+    outfit_id = add_outfit("Red jacket", "90")
+    form = {"name": "Red leather jacket", "change_seconds": "150"}
+    assert service.edit_outfit(outfit_id, form) == []
+    outfit = repository.get_outfit(outfit_id)
+    assert outfit["name"] == "Red leather jacket"
+    assert outfit["change_seconds"] == 150
+
+
+def test_edit_outfit_may_keep_its_own_name():
+    outfit_id = add_outfit("Red jacket", "90")
+    form = {"name": "Red jacket", "change_seconds": "60"}
+    assert service.edit_outfit(outfit_id, form) == []
+
+
+def test_edit_outfit_rejects_another_outfits_name_and_saves_nothing():
+    add_outfit("Tuxedo", "90")
+    outfit_id = add_outfit("Red jacket", "90")
+    form = {"name": "Tuxedo", "change_seconds": "30"}
+    assert service.edit_outfit(outfit_id, form) == [
+        "An outfit with this name already exists."
+    ]
+    assert repository.get_outfit(outfit_id)["change_seconds"] == 90
+
+
+def test_edit_outfit_with_a_bad_form_saves_nothing():
+    outfit_id = add_outfit("Red jacket", "90")
+    form = {"name": "Red jacket", "change_seconds": str(service.MAX_CHANGE_SECONDS + 1)}
+    assert service.edit_outfit(outfit_id, form) == [
+        "Change time must be between 0 and 600 seconds."
+    ]
+    assert repository.get_outfit(outfit_id)["change_seconds"] == 90
+
+
+def test_remove_outfit_no_song_uses_deletes_it():
+    outfit_id = add_outfit()
+    assert service.remove_outfit(outfit_id) == []
+    assert repository.get_outfit(outfit_id) is None
+
+
+def test_remove_outfit_used_by_a_song_is_refused_and_deletes_nothing():
+    outfit_id = add_outfit()
+    add_song(outfit_id)
+    assert service.remove_outfit(outfit_id) == [
+        "This outfit is used by 1 song (retired ones count too). "
+        "Move them to another outfit first."
+    ]
+    assert repository.get_outfit(outfit_id) is not None
+
+
+def test_remove_outfit_counts_retired_songs_too():
+    outfit_id = add_outfit()
+    service.retire_song(add_song(outfit_id, "Billie Jean"))
+    add_song(outfit_id, "Beat It")
+    [error] = service.remove_outfit(outfit_id)
+    assert "used by 2 songs" in error
+
+
+def test_outfit_song_count_includes_outfits_no_song_uses():
+    used = add_outfit("Red jacket")
+    add_outfit("Tuxedo")
+    add_song(used)
+    counts = {
+        outfit["name"]: outfit["song_count"]
+        for outfit in repository.list_outfits_with_song_count()
+    }
+    assert counts == {"Red jacket": 1, "Tuxedo": 0}
 
 
 # Adding and editing songs -----------------------------------------------
 
 
-def test_add_song_saves_typed_values():
+def test_add_song_saves_typed_values_and_returns_its_id():
     song_id = add_song(add_outfit())
     song = repository.get_song(song_id)
     assert song["title"] == "Billie Jean"
@@ -70,19 +145,19 @@ def test_add_song_saves_typed_values():
 
 def test_add_song_with_a_bad_form_saves_nothing():
     form = dict(song_form(add_outfit()), energy="9")
-    assert service.add_song(form) == ["Energy must be between 1 and 5."]
+    assert service.add_song(form) == (None, ["Energy must be between 1 and 5."])
     assert repository.list_songs() == []
 
 
 def test_add_song_rejects_an_outfit_that_does_not_exist():
-    errors = service.add_song(song_form(outfit_id=99))
+    _, errors = service.add_song(song_form(outfit_id=99))
     assert errors == ["That outfit does not exist."]
 
 
 def test_add_song_rejects_the_same_title_and_album():
     outfit_id = add_outfit()
     add_song(outfit_id)
-    errors = service.add_song(song_form(outfit_id))
+    _, errors = service.add_song(song_form(outfit_id))
     assert errors == ["This title and album is already in the catalogue."]
 
 

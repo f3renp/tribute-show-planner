@@ -3,14 +3,17 @@ with waitress.
 
 Start it from services/catalogue with: python app/main.py
 """
-from flask import Flask, redirect, url_for
+import json
+
+from flask import Flask
 from waitress import serve
+from werkzeug.exceptions import HTTPException
 
 import config
 import migrate
 import seed
 from catalogue.api import bp as api_bp
-from catalogue.routes import bp as catalogue_bp
+from cors import allow_ui_origin
 from request_log import log_requests
 
 
@@ -24,16 +27,20 @@ def create_app():
     seed.seed_demo_catalogue()
     app = Flask(__name__)
     log_requests(app)
-    app.register_blueprint(catalogue_bp)
+    allow_ui_origin(app)
     app.register_blueprint(api_bp)
 
-    @app.context_processor
-    def links_to_other_services():
-        return {"shows_public_url": config.SHOWS_PUBLIC_URL}
-
-    @app.route("/")
-    def home():
-        return redirect(url_for("catalogue.song_list"))
+    @app.errorhandler(HTTPException)
+    def error_as_json(error):
+        """Every HTTP error (abort(404), an unknown path, a wrong method, an
+        unexpected exception turned into a 500) as {"errors": [message]}
+        instead of Flask's HTML page. The 500 message is generic: the
+        details stay in the server log, never in the answer."""
+        # get_response() keeps the error's own headers, e.g. Allow on a 405.
+        response = error.get_response()
+        response.data = json.dumps({"errors": [error.description]})
+        response.content_type = "application/json"
+        return response
 
     @app.route("/health")
     def health():
