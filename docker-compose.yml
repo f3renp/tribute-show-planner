@@ -55,7 +55,6 @@ services:
     ports:
       - "8001:8000"
     environment:
-      SHOWS_PUBLIC_URL: ${SHOWS_PUBLIC_URL:-http://localhost:8002}
       # Same LOCAL-ONLY default password that db-init gives catalogue_app.
       # "sqlserver" is the compose service name, reachable on this network.
       DATABASE_URL: mssql://catalogue_app:${CATALOGUE_DB_PASSWORD:-LocalOnly_Catalogue_2026!}@sqlserver:1433/catalogue

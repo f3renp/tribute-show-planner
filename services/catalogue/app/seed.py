@@ -53,7 +53,7 @@ def catalogue_is_empty():
 def add_demo_outfits():
     """Save every demo outfit through the catalogue service."""
     for name, change_seconds in DEMO_OUTFITS:
-        errors = service.add_outfit({"name": name, "change_seconds": str(change_seconds)})
+        _, errors = service.add_outfit({"name": name, "change_seconds": str(change_seconds)})
         if errors:
             raise ValueError(f"Demo outfit {name!r} is invalid: {errors}")
 
@@ -71,7 +71,7 @@ def add_demo_songs():
             "kind": kind,
             "outfit_id": str(outfit_id),
         }
-        errors = service.add_song(form)
+        _, errors = service.add_song(form)
         if errors:
             raise ValueError(f"Demo song {title!r} is invalid: {errors}")
 

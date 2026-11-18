@@ -28,6 +28,12 @@ MIGRATIONS_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "migrations"
 )
 
-# Address of the shows service as the browser sees it, for the "Shows" link
-# in the page header. This is a browser link, not a service-to-service call.
-SHOWS_PUBLIC_URL = os.environ.get("SHOWS_PUBLIC_URL", "http://localhost:8002")
+# Origins (scheme://host:port, no trailing slash) whose pages may call this
+# API from the browser, separated by commas. The default is the UI served
+# by nginx in docker compose. On Azure the pipeline sets the Storage static
+# website's origin. Empty means no browser page may call it (cors.py).
+CORS_ORIGINS = [
+    origin.strip()
+    for origin in os.environ.get("CORS_ORIGINS", "http://localhost:8080").split(",")
+    if origin.strip()
+]

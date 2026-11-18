@@ -72,7 +72,8 @@ def read_duration(text):
 def validate_song(form):
     """Check a submitted song form and return (song, errors).
 
-    form is a dict of strings, as it arrives from an HTML form. song holds
+    form is a dict of strings (api.py turns the JSON values into text, so
+    a year sent as 1982 or "1982" is checked the same way). song holds
     the cleaned, typed values. It may only be saved if errors is empty.
     The duplicate title and album check needs the database, so it is not
     done here.
@@ -143,19 +144,6 @@ def validate_outfit(form):
     return outfit, errors
 
 
-def song_to_form(song):
-    """Turn a saved song back into form strings, to fill the edit form."""
-    return {
-        "title": song["title"],
-        "album": song["album"],
-        "year": str(song["year"]),
-        "duration": format_duration(song["duration_seconds"]),
-        "energy": str(song["energy"]),
-        "kind": song["kind"],
-        "outfit_id": str(song["outfit_id"]),
-    }
-
-
 # Saving: these use the database through the repository ------------------
 
 
@@ -175,13 +163,16 @@ def check_song_against_catalogue(song, song_id=None):
 
 
 def add_song(form):
-    """Validate a new song form and save it. Return the errors, empty if saved."""
+    """Validate a new song form and save it. Return (new_id, errors).
+
+    new_id is None when nothing was saved; errors is empty when it was.
+    """
     song, errors = validate_song(form)
     if not errors:
         errors = check_song_against_catalogue(song)
-    if not errors:
-        repository.insert_song(song)
-    return errors
+    if errors:
+        return None, errors
+    return repository.insert_song(song), []
 
 
 def edit_song(song_id, form):
@@ -220,11 +211,56 @@ def reactivate_song(song_id):
     repository.set_song_active(song_id, True)
 
 
+def check_outfit_name_is_free(name, outfit_id=None):
+    """Errors if another outfit already has this name.
+
+    outfit_id is the outfit being edited, so keeping its own name is fine.
+    It is None when adding a new outfit.
+    """
+    existing = repository.find_outfit_by_name(name)
+    if existing is not None and existing["id"] != outfit_id:
+        return ["An outfit with this name already exists."]
+    return []
+
+
 def add_outfit(form):
-    """Validate an outfit form and save it. Return the errors, empty if saved."""
+    """Validate an outfit form and save it. Return (new_id, errors).
+
+    new_id is None when nothing was saved; errors is empty when it was.
+    """
     outfit, errors = validate_outfit(form)
-    if not errors and repository.find_outfit_by_name(outfit["name"]) is not None:
-        errors.append("An outfit with this name already exists.")
     if not errors:
-        repository.insert_outfit(outfit)
+        errors = check_outfit_name_is_free(outfit["name"])
+    if errors:
+        return None, errors
+    return repository.insert_outfit(outfit), []
+
+
+def edit_outfit(outfit_id, form):
+    """Validate an edited outfit form and save it. Return the errors, empty if saved."""
+    outfit, errors = validate_outfit(form)
+    if not errors:
+        errors = check_outfit_name_is_free(outfit["name"], outfit_id)
+    if not errors:
+        repository.update_outfit(outfit_id, outfit)
     return errors
+
+
+def remove_outfit(outfit_id):
+    """Delete an outfit that no song uses. Return the errors, empty if deleted.
+
+    Retired songs count too: they keep their outfit_id and could be
+    reactivated. The foreign key fk_songs_outfit would also refuse the
+    delete; checking first gives a clear message instead of a SQL error.
+    (A song added between the check and the delete would still hit the
+    foreign key, but with one replica and one user that is not expected.)
+    """
+    song_count = repository.count_songs_using_outfit(outfit_id)
+    if song_count:
+        noun = "song" if song_count == 1 else "songs"
+        return [
+            f"This outfit is used by {song_count} {noun} (retired ones count "
+            "too). Move them to another outfit first."
+        ]
+    repository.delete_outfit(outfit_id)
+    return []

@@ -6,7 +6,6 @@ from catalogue.service import (
     parse_duration,
     parse_whole_number,
     read_duration,
-    song_to_form,
     validate_outfit,
     validate_song,
 )
@@ -152,11 +151,6 @@ def test_values_at_the_limits_are_accepted(field, value):
     form = dict(valid_song_form(), **{field: value})
     song, errors = validate_song(form)
     assert errors == []
-
-
-def test_song_to_form_fills_a_form_that_validates_to_the_same_song():
-    song, errors = validate_song(valid_song_form())
-    assert validate_song(song_to_form(song)) == (song, [])
 
 
 # Outfit validation ------------------------------------------------------

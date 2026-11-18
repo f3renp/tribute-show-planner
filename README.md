@@ -9,8 +9,8 @@ songs.
 It runs as two services, each a Flask app served by waitress with its own
 SQLite database (ADR-6 in `ADR.md`):
 
-- **Catalogue** (`services/catalogue/`): songs and outfits, at
-  http://localhost:8001/catalogue/. Owns the `outfits` and `songs` tables.
+- **Catalogue** (`services/catalogue/`): songs and outfits, as a JSON API
+  at http://localhost:8001/api/. Owns the `outfits` and `songs` tables.
 - **Shows** (`services/shows/`): shows, ordered setlists and the setlist
   checks (`shows/rules.py`), at http://localhost:8002/shows/. Owns the
   `shows` and `setlist_items` tables.
@@ -23,6 +23,22 @@ over HTTP:
 | `GET /api/songs?ids=3,7` | The songs with these ids (unknown ids are left out) |
 | `GET /api/songs/active` | The songs that can be added to a setlist |
 | `GET /health` (both services) | `{"status": "ok"}` |
+
+The rest of the catalogue API is for the browser. Errors are
+`{"errors": ["message", ...]}`: 400 for invalid values (every field error
+at once), 404 for an unknown id, 409 for removing an outfit songs use.
+
+| Endpoint | Returns |
+|----------|---------|
+| `GET /api/songs/all` | Every song, active first, with `duration` as `"4:54"` |
+| `GET /api/songs/{id}` | One song (404 if unknown) |
+| `POST /api/songs` | 201 and the new song, or 400 |
+| `PUT /api/songs/{id}` | The saved song, 400 or 404 |
+| `POST /api/songs/{id}/retire`, `/reactivate` | The song, or 404 |
+| `GET /api/outfits` | Every outfit, with `song_count` |
+| `POST /api/outfits` | 201 and the new outfit, or 400 |
+| `PUT /api/outfits/{id}` | The saved outfit, 400 or 404 |
+| `DELETE /api/outfits/{id}` | 204, 404, or 409 if songs (also retired ones) use it |
 
 ## Run locally
 
@@ -75,7 +91,7 @@ lists the ones you may want to change.
 | `CATALOGUE_URL` | shows | `http://localhost:8001` | Where shows calls the catalogue API. Compose sets `http://catalogue:8000`. |
 | `CATALOGUE_TIMEOUT` | shows | `5` | Seconds to wait for the catalogue. |
 | `CATALOGUE_PUBLIC_URL` | shows | `http://localhost:8001` | Catalogue address for links in the browser. |
-| `SHOWS_PUBLIC_URL` | catalogue | `http://localhost:8002` | Shows address for links in the browser. |
+| `CORS_ORIGINS` | catalogue | `http://localhost:8080` | Comma-separated origins whose pages may call the API from the browser. Empty allows none. |
 
 ## Tests and coverage
 
@@ -165,13 +181,14 @@ Notes:
 - `services/<name>/app/db.py` and `schema.sql`: SQLite connections and the
   tables that service owns.
 - `services/catalogue/app/seed.py`: the demo catalogue.
-- `services/catalogue/app/catalogue/`: `routes.py` (pages), `api.py` (JSON
-  for the shows service), `service.py` (rules and validation),
+- `services/catalogue/app/catalogue/`: `api.py` (the JSON API, for the
+  browser and the shows service), `service.py` (rules and validation),
   `repository.py` (SQL).
+- `services/catalogue/app/cors.py`: the CORS headers for `CORS_ORIGINS`.
 - `services/shows/app/shows/`: `routes.py`, `service.py`, `repository.py`,
   `rules.py` (the six setlist checks) and `catalogue_client.py` (the HTTP
   calls to the catalogue).
-- `services/<name>/app/templates/`, `static/`: HTML templates, CSS and a
+- `services/shows/app/templates/`, `static/`: HTML templates, CSS and a
   little JavaScript.
 - `docs/diagrams.md`: architecture and database diagrams (still show the
   single-app version).

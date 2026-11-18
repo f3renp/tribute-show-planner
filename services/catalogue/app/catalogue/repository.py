@@ -94,6 +94,23 @@ def list_outfits():
     return db.fetch_all("SELECT * FROM outfits ORDER BY name")
 
 
+def list_outfits_with_song_count():
+    """All outfits sorted by name, each with song_count: how many songs
+    (active or retired) use it. The UI uses it to explain why an outfit
+    cannot be removed."""
+    # LEFT JOIN keeps outfits no song uses; COUNT(songs.id) is 0 for them.
+    return db.fetch_all(
+        """
+        SELECT outfits.id, outfits.name, outfits.change_seconds,
+               COUNT(songs.id) AS song_count
+        FROM outfits
+        LEFT JOIN songs ON songs.outfit_id = outfits.id
+        GROUP BY outfits.id, outfits.name, outfits.change_seconds
+        ORDER BY outfits.name
+        """
+    )
+
+
 def get_outfit(outfit_id):
     """One outfit as a dict, or None if the id does not exist."""
     return db.fetch_one("SELECT * FROM outfits WHERE id = %s", (outfit_id,))
@@ -114,3 +131,29 @@ def insert_outfit(outfit):
         """,
         outfit,
     )
+
+
+def update_outfit(outfit_id, outfit):
+    """Overwrite the name and change time of an existing outfit."""
+    db.execute(
+        """
+        UPDATE outfits
+        SET name = %(name)s, change_seconds = %(change_seconds)s
+        WHERE id = %(id)s
+        """,
+        dict(outfit, id=outfit_id),
+    )
+
+
+def count_songs_using_outfit(outfit_id):
+    """How many songs, active or retired, use this outfit."""
+    row = db.fetch_one(
+        "SELECT COUNT(*) AS song_count FROM songs WHERE outfit_id = %s",
+        (outfit_id,),
+    )
+    return row["song_count"]
+
+
+def delete_outfit(outfit_id):
+    """Delete an outfit. The caller checks first that no song uses it."""
+    db.execute("DELETE FROM outfits WHERE id = %s", (outfit_id,))
