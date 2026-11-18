@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Outfits - Tribute Show Planner</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="config.js" defer></script>
+  <script src="js/api.js" defer></script>
+  <script src="js/shouts.js" defer></script>
+  <script src="js/outfits.js" defer></script>
+</head>
+<body>
+  <header>
+    <strong>Tribute Show Planner</strong>
+    <nav>
+      <a href="index.html">Songs</a>
+      <a href="outfits.html">Outfits</a>
+      <a href="shows.html">Shows</a>
+    </nav>
+  </header>
+  <main>
+    <h1>Outfits</h1>
+
+    <p id="loading" class="loading">Loading...</p>
+    <div id="page-error" class="service-down" role="alert" hidden></div>
+    <ul id="list-errors" class="errors" role="alert" hidden></ul>
+
+    <p id="no-outfits" hidden>No outfits yet.</p>
+    <table id="outfits" hidden>
+      <thead>
+        <tr><th>Name</th><th>Change time (seconds)</th><th>Used by</th><th></th></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+
+    <h2 id="form-heading">Add an outfit</h2>
+    <form id="outfit-form" class="stacked">
+      <ul id="form-errors" class="errors" role="alert" hidden></ul>
+      <label>Name <input name="name"></label>
+      <label>Change time (seconds) <input name="change_seconds"></label>
+      <div class="form-buttons">
+        <button id="save">Add outfit</button>
+        <button id="cancel-edit" type="button" hidden>Cancel</button>
+      </div>
+    </form>
+  </main>
+</body>
+</html>

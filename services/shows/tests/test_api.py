@@ -435,6 +435,41 @@ def test_preflight_from_the_ui_allows_json_deletes(client):
     assert response.headers["Access-Control-Allow-Headers"] == "Content-Type"
 
 
+# Origin check: changes from another site's page are refused -----------
+
+
+def test_a_change_from_another_origin_is_403_and_changes_nothing(client):
+    show_id, (a, b, c) = three_breaks(client)
+    response = client.delete(
+        f"/api/shows/{show_id}/items/{a}", headers={"Origin": "http://evil.example"}
+    )
+    assert response.status_code == 403
+    assert response.get_json() == {
+        "errors": ["Origin http://evil.example may not change data here."]
+    }
+    assert len(repository.list_items(show_id)) == 3
+
+
+def test_a_show_delete_from_another_origin_is_403(client):
+    show_id = create_show(client)
+    response = client.delete(f"/api/shows/{show_id}", headers={"Origin": "http://evil.example"})
+    assert response.status_code == 403
+    assert repository.get_show(show_id) is not None
+
+
+def test_a_change_from_the_ui_origin_is_allowed(client):
+    show_id, (a, b, c) = three_breaks(client)
+    response = client.delete(f"/api/shows/{show_id}/items/{a}", headers={"Origin": UI_ORIGIN})
+    assert response.status_code == 200
+    assert len(repository.list_items(show_id)) == 2
+
+
+def test_a_read_from_another_origin_is_answered_without_cors_headers(client):
+    response = client.get("/api/shows", headers={"Origin": "http://evil.example"})
+    assert response.status_code == 200
+    assert "Access-Control-Allow-Origin" not in response.headers
+
+
 @pytest.mark.usefixtures("catalogue_down")
 def test_the_503_carries_cors_headers_so_the_ui_can_show_it(client):
     show_id = save_show_with_song_7_and_a_break()

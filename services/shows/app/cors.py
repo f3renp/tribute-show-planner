@@ -14,6 +14,13 @@ gets none, so the browser refuses to give the page the answer.
 CORS is a browser rule, not access control: curl or another service can
 still call the API (shows does, server to server).
 
+CORS stops another site from reading our answers, not from sending us
+requests: a hostile page can still auto-submit an HTML form (a "simple"
+POST, with no preflight). So a request that changes data and comes from a
+page on another origin is refused with 403 before it runs (cross-site
+request forgery). Requests with no Origin header, like curl or the shows
+service calling the catalogue, are not from a browser page and pass.
+
 Configured here in the code, never on the Container Apps ingress.
 """
 from flask import request
@@ -32,8 +39,23 @@ ALLOWED_HEADERS = "Content-Type"
 PREFLIGHT_MAX_AGE_SECONDS = "600"
 
 
+# Methods that only read. Every other method may change data.
+READ_ONLY_METHODS = ("GET", "HEAD", "OPTIONS")
+
+
 def allow_ui_origin(app):
-    """Add the CORS headers to every response of app, for allowed origins only."""
+    """Refuse changes from other origins, and add the CORS headers to every
+    response of app, for allowed origins only."""
+
+    @app.before_request
+    def refuse_changes_from_other_origins():
+        # Returning None lets the request run; returning a response stops it.
+        origin = request.headers.get("Origin")
+        if request.method in READ_ONLY_METHODS or origin is None:
+            return None
+        if origin in config.CORS_ORIGINS:
+            return None
+        return {"errors": [f"Origin {origin} may not change data here."]}, 403
 
     @app.after_request
     def add_cors_headers(response):

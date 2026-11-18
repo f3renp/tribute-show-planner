@@ -1,5 +1,5 @@
-# Runs both services: docker compose up --build
-# Catalogue: http://localhost:8001   Shows: http://localhost:8002
+# Runs the whole system: docker compose up --build
+# UI: http://localhost:8080   APIs: http://localhost:8001 (catalogue), http://localhost:8002 (shows)
 # Optional settings come from a .env file next to this one (see .env.example).
 #
 # Passwords: the ${VAR:-default} values below are LOCAL-ONLY defaults, so a
@@ -55,6 +55,8 @@ services:
     ports:
       - "8001:8000"
     environment:
+      # Only pages from the UI below may call this API from the browser.
+      CORS_ORIGINS: http://localhost:8080
       # Same LOCAL-ONLY default password that db-init gives catalogue_app.
       # "sqlserver" is the compose service name, reachable on this network.
       DATABASE_URL: mssql://catalogue_app:${CATALOGUE_DB_PASSWORD:-LocalOnly_Catalogue_2026!}@sqlserver:1433/catalogue
@@ -71,6 +73,7 @@ services:
     environment:
       # Service-to-service call on the compose network, by service name.
       CATALOGUE_URL: http://catalogue:8000
+      CORS_ORIGINS: http://localhost:8080
       # Same LOCAL-ONLY default password that db-init gives shows_app.
       DATABASE_URL: mssql://shows_app:${SHOWS_DB_PASSWORD:-LocalOnly_Shows_2026!}@sqlserver:1433/shows
     depends_on:
@@ -80,6 +83,19 @@ services:
       catalogue:
         # Wait for the catalogue's HEALTHCHECK (GET /health) to pass.
         condition: service_healthy
+
+  # The static UI (ui/): a stock web server with the folder mounted, no
+  # Dockerfile and no code of ours. Not a service container: it only hands
+  # the files to the browser, which then calls both APIs itself (config.js
+  # holds their URLs). No depends_on, so the UI loads even when a service
+  # is down and can say so.
+  ui:
+    image: nginx:1.27-alpine
+    ports:
+      - "8080:80"
+    volumes:
+      # :ro read-only: nginx can serve the files but never change them.
+      - ./ui:/usr/share/nginx/html:ro
 
 volumes:
   # The only volume: both services' databases live in this SQL Server.

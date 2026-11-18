@@ -413,6 +413,44 @@ def test_errors_carry_cors_headers_too(client):
     assert response.headers["Access-Control-Allow-Origin"] == UI_ORIGIN
 
 
+# Origin check: changes from another site's page are refused -----------
+
+
+def test_a_change_from_another_origin_is_403_and_changes_nothing(client):
+    # What a hostile page could send with an auto-submitted HTML form: a
+    # simple POST, so the browser sends it without asking first.
+    billie_jean = song_id("Billie Jean", "Thriller")
+    response = client.post(
+        f"/api/songs/{billie_jean}/retire", headers={"Origin": "http://evil.example"}
+    )
+    assert response.status_code == 403
+    assert response.get_json() == {
+        "errors": ["Origin http://evil.example may not change data here."]
+    }
+    assert repository.get_song(billie_jean)["active"] == 1
+
+
+def test_a_change_from_the_ui_origin_is_allowed(client):
+    billie_jean = song_id("Billie Jean", "Thriller")
+    response = client.post(f"/api/songs/{billie_jean}/retire", headers={"Origin": UI_ORIGIN})
+    assert response.status_code == 200
+    assert repository.get_song(billie_jean)["active"] == 0
+
+
+def test_a_change_with_no_origin_is_allowed(client):
+    # curl, or another service: not a browser page, so no Origin header.
+    billie_jean = song_id("Billie Jean", "Thriller")
+    assert client.post(f"/api/songs/{billie_jean}/retire").status_code == 200
+
+
+def test_a_read_from_another_origin_is_answered_without_cors_headers(client):
+    # Reads change nothing, so they are not refused; the browser just
+    # does not give the answer to the other site's page.
+    response = client.get("/api/songs/all", headers={"Origin": "http://evil.example"})
+    assert response.status_code == 200
+    assert "Access-Control-Allow-Origin" not in response.headers
+
+
 def test_no_origins_configured_allows_none(client, monkeypatch):
     monkeypatch.setattr(config, "CORS_ORIGINS", [])
     response = client.get("/api/outfits", headers={"Origin": UI_ORIGIN})
