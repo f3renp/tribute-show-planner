@@ -123,7 +123,9 @@ def test_empty_form_reports_every_problem_at_once():
     "field, value",
     [
         ("title", "   "),
+        ("title", "x" * 201),
         ("album", ""),
+        ("album", "x" * 201),
         ("year", "1963"),
         ("year", "2015"),
         ("year", "nineteen"),
@@ -175,6 +177,7 @@ def test_outfit_change_time_limits_are_accepted():
     "form",
     [
         {"name": "", "change_seconds": "90"},
+        {"name": "x" * 101, "change_seconds": "90"},
         {"name": "Red jacket", "change_seconds": "-1"},
         {"name": "Red jacket", "change_seconds": "601"},
         {"name": "Red jacket", "change_seconds": "ninety"},

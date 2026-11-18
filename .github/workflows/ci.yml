@@ -20,6 +20,32 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      # The tests use a SQL Server container, never Azure SQL. Passwords are
+      # random for each run, so none is written in this file. ::add-mask::
+      # hides them if they ever appear in the log. GITHUB_ENV passes them to
+      # the next steps as environment variables.
+      - name: Make passwords for the test SQL Server
+        run: |
+          for name in MSSQL_SA_PASSWORD CATALOGUE_DB_PASSWORD SHOWS_DB_PASSWORD; do
+            password="Ci_$(openssl rand -hex 16)"
+            echo "::add-mask::$password"
+            echo "$name=$password" >> "$GITHUB_ENV"
+          done
+      # Same sqlserver and db-init as locally: compose reads the passwords
+      # above instead of its LocalOnly defaults. run waits for the
+      # healthcheck, then db-init creates the databases and logins.
+      - name: Start SQL Server and create the databases
+        working-directory: .
+        run: docker compose run --rm db-init
+      # Each matrix job uses its own login and its own *_test database.
+      - name: Point the tests at the test database
+        run: |
+          if [ "${{ matrix.service }}" = "catalogue" ]; then
+            password="$CATALOGUE_DB_PASSWORD"
+          else
+            password="$SHOWS_DB_PASSWORD"
+          fi
+          echo "TEST_DATABASE_URL=mssql://${{ matrix.service }}_app:${password}@127.0.0.1:1433/${{ matrix.service }}_test" >> "$GITHUB_ENV"
       - run: pip install -r requirements-dev.txt
       - run: python -m pytest
 

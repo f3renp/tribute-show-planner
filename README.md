@@ -34,11 +34,12 @@ docker compose up --build
 
 Then open http://localhost:8001 (catalogue) or http://localhost:8002
 (shows). Stop with Ctrl+C. `docker compose down` removes the containers;
-the data stays in the `catalogue-data` and `shows-data` volumes until you
-run `docker compose down -v`.
+the data stays in the `sqlserver-data` volume until you run
+`docker compose down -v`.
 
-There is no other setup step and no `.env` file is needed. At startup each
-service creates its tables if they are missing. If the catalogue is empty,
+There is no other setup step and no `.env` file is needed. Compose starts
+SQL Server, `db-init` runs `db/init.sql` (databases and logins), then each
+service applies its pending migrations (`services/<name>/migrations/`). If the catalogue is empty,
 it also adds a demo catalogue (`seed.py`): 7 outfits and 20 songs, with one
 song already retired. A catalogue that already has data is never changed.
 
@@ -68,19 +69,20 @@ lists the ones you may want to change.
 | Variable | Service | Default | What it does |
 |----------|---------|---------|--------------|
 | `PORT` | both | `8000` | Port the server listens on. It always binds to `0.0.0.0`. |
-| `DATA_DIR` | both | `data` (`/data` in the image) | Folder for the SQLite file: `catalogue.db` or `shows.db`. |
+| `DATABASE_URL` | both | none (required, holds a password) | `mssql://user:password@host:1433/database`. Compose sets it with a local-only password. |
+| `DB_CONNECT_ATTEMPTS` | both | `8` | Connection attempts, with waits of 1, 2, 4, 8, 15... s between them (about a minute). |
+| `DB_LOGIN_TIMEOUT_SECONDS` | both | `10` | Seconds one connection attempt may take. |
 | `CATALOGUE_URL` | shows | `http://localhost:8001` | Where shows calls the catalogue API. Compose sets `http://catalogue:8000`. |
 | `CATALOGUE_TIMEOUT` | shows | `5` | Seconds to wait for the catalogue. |
 | `CATALOGUE_PUBLIC_URL` | shows | `http://localhost:8001` | Catalogue address for links in the browser. |
 | `SHOWS_PUBLIC_URL` | catalogue | `http://localhost:8002` | Shows address for links in the browser. |
 
-A relative `DATA_DIR` is relative to the folder the service is started
-from.
-
 ## Tests and coverage
 
 Each service has its own tests in its `tests/` folder. The database tests
-each run on a new temporary SQLite file. The shows tests never call the
+run on that service's `_test` database (`catalogue_test`, `shows_test`) in
+the compose SQL Server, emptied before every test; start it first with
+`docker compose up -d sqlserver db-init`. The shows tests never call the
 real catalogue: they use a fake one (the `catalogue` fixture in
 `services/shows/tests/conftest.py`).
 

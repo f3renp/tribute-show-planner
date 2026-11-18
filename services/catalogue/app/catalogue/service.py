@@ -23,6 +23,12 @@ SONG_KINDS = ("dance", "ballad")
 # A costume change longer than 10 minutes would stop the show.
 MAX_CHANGE_SECONDS = 10 * 60
 
+# Sizes of the NVARCHAR columns in migrations/001_init.sql. Longer text
+# would be refused by SQL Server, so the form reports it first.
+MAX_TITLE_LENGTH = 200
+MAX_ALBUM_LENGTH = 200
+MAX_OUTFIT_NAME_LENGTH = 100
+
 
 def parse_duration(text):
     """Turn "4:54" into 294 seconds. Raise ValueError if it is not m:ss."""
@@ -76,10 +82,14 @@ def validate_song(form):
     title = form.get("title", "").strip()
     if not title:
         errors.append("Title is required.")
+    elif len(title) > MAX_TITLE_LENGTH:
+        errors.append(f"Title must be at most {MAX_TITLE_LENGTH} characters.")
 
     album = form.get("album", "").strip()
     if not album:
         errors.append("Album is required.")
+    elif len(album) > MAX_ALBUM_LENGTH:
+        errors.append(f"Album must be at most {MAX_ALBUM_LENGTH} characters.")
 
     year = parse_whole_number(form.get("year", ""))
     if year is None or not MIN_YEAR <= year <= MAX_YEAR:
@@ -120,6 +130,8 @@ def validate_outfit(form):
     name = form.get("name", "").strip()
     if not name:
         errors.append("Name is required.")
+    elif len(name) > MAX_OUTFIT_NAME_LENGTH:
+        errors.append(f"Name must be at most {MAX_OUTFIT_NAME_LENGTH} characters.")
 
     change_seconds = parse_whole_number(form.get("change_seconds", ""))
     if change_seconds is None or not 0 <= change_seconds <= MAX_CHANGE_SECONDS:
