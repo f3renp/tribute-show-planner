@@ -39,20 +39,23 @@ def test_version_is_the_file_name_without_sql():
 
 
 # Against the test database -------------------------------------------------
+# fresh_database (conftest.py) drops every table and runs the migrations
+# from 001 before each of these tests, and has the next test rebuild the
+# schema, since the temporary 002 files below change it.
 
-@pytest.mark.usefixtures("database")
+@pytest.mark.usefixtures("fresh_database")
 def test_the_first_start_applies_and_records_001():
-    # The database fixture has just run the migrations on an empty database.
+    # The fixture has just run the migrations on an empty database.
     assert recorded_versions() == ["001_init"]
 
 
-@pytest.mark.usefixtures("database")
+@pytest.mark.usefixtures("fresh_database")
 def test_a_second_start_applies_nothing():
     assert migrate.apply_migrations() == []
     assert recorded_versions() == ["001_init"]
 
 
-@pytest.mark.usefixtures("database")
+@pytest.mark.usefixtures("fresh_database")
 def test_a_new_migration_runs_once_and_keeps_existing_rows(tmp_path):
     db.insert(
         "INSERT INTO shows (name, venue, show_date, max_minutes) OUTPUT INSERTED.id "
@@ -71,7 +74,7 @@ def test_a_new_migration_runs_once_and_keeps_existing_rows(tmp_path):
     assert show == {"name": "Halloween night", "city": "Madrid"}
 
 
-@pytest.mark.usefixtures("database")
+@pytest.mark.usefixtures("fresh_database")
 def test_a_failing_migration_is_rolled_back_and_not_recorded(tmp_path):
     write_migration(
         tmp_path,

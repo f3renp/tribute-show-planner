@@ -1,8 +1,9 @@
 """Tests for the catalogue's JSON API (catalogue/api.py), the JSON errors and
 CORS (cors.py), through Flask's test client.
 
-create_app() seeds the demo catalogue into catalogue_test, so the demo
-songs and outfits are there to ask for.
+The client fixture puts the demo catalogue into catalogue_test first (the
+fast demo_catalogue fixture from conftest.py), so the demo songs and
+outfits are there to ask for and create_app() does not seed again.
 """
 import pytest
 
@@ -16,7 +17,7 @@ UI_ORIGIN = "http://localhost:8080"
 
 
 @pytest.fixture
-def client(monkeypatch):
+def client(demo_catalogue, monkeypatch):
     monkeypatch.setattr(config, "CORS_ORIGINS", [UI_ORIGIN])
     return main.create_app().test_client()
 

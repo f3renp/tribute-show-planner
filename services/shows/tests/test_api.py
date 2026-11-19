@@ -16,8 +16,10 @@ UI_ORIGIN = "http://localhost:8080"
 
 
 @pytest.fixture
-def client(database, monkeypatch):
-    """A Flask test client on a fresh shows_test database."""
+def client(database, catalogue, monkeypatch):
+    """A Flask test client on a fresh shows_test database, with an empty
+    fake catalogue, so no test calls the real one (with nothing listening,
+    each real call takes ~4 s to fail on Windows)."""
     monkeypatch.setattr(config, "CORS_ORIGINS", [UI_ORIGIN])
     return main.create_app().test_client()
 
