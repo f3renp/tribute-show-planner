@@ -1,0 +1,180 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/f3renp/tribute-show-planner/system.schema.json",
+  "title": "system.yaml",
+  "description": "Format of system.yaml. No schema was provided with the brief, so this one is ours, written from the example in the brief (section 8a), with the UI on an Azure Storage static website as in the professor's deployment guide. Every object is closed (additionalProperties false), so a misspelt field is an error, and every field is required, so a missing one is an error too.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["student", "prefix", "public_url", "ui", "azure", "services"],
+  "properties": {
+    "student": {
+      "description": "IE user name: the part of the IE email before @.",
+      "type": "string",
+      "pattern": "^[a-z0-9]+(\\.[a-z0-9]+)*$"
+    },
+    "prefix": {
+      "description": "The student name with dots replaced by hyphens; every Azure resource name starts with it.",
+      "$ref": "#/$defs/azureName"
+    },
+    "public_url": {
+      "description": "Public URL of the system: the UI's static website.",
+      "$ref": "#/$defs/httpsUrl"
+    },
+    "ui": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "storage_account", "calls"],
+      "properties": {
+        "path": { "description": "Folder with the static files.", "$ref": "#/$defs/repoPath" },
+        "storage_account": {
+          "description": "Azure Storage account serving the static website: 3-24 lowercase letters and digits.",
+          "type": "string",
+          "pattern": "^[a-z0-9]{3,24}$"
+        },
+        "calls": {
+          "description": "Services the UI calls from the browser.",
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/serviceName" }
+        }
+      }
+    },
+    "azure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "resource_group",
+        "container_apps_environment",
+        "sql_server",
+        "registry",
+        "managed_identity"
+      ],
+      "properties": {
+        "resource_group": { "type": "string", "pattern": "^rg-[a-z0-9-]+$" },
+        "container_apps_environment": { "$ref": "#/$defs/azureName" },
+        "sql_server": { "$ref": "#/$defs/azureName" },
+        "registry": {
+          "description": "Image registry, e.g. ghcr.io/owner.",
+          "type": "string",
+          "pattern": "^[a-z0-9.-]+(/[a-z0-9_.-]+)+$"
+        },
+        "managed_identity": {
+          "description": "User-assigned managed identity the pipeline signs in with (OIDC).",
+          "$ref": "#/$defs/azureName"
+        }
+      }
+    },
+    "services": {
+      "description": "Exactly two services, one per feature domain.",
+      "type": "object",
+      "minProperties": 2,
+      "maxProperties": 2,
+      "propertyNames": { "$ref": "#/$defs/serviceName" },
+      "additionalProperties": { "$ref": "#/$defs/service" }
+    }
+  },
+  "$defs": {
+    "azureName": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+    },
+    "serviceName": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*$"
+    },
+    "repoPath": {
+      "description": "A path relative to the repository root, with forward slashes.",
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$"
+    },
+    "httpsUrl": {
+      "type": "string",
+      "pattern": "^https://[^\\s/]+(/\\S*)?$"
+    },
+    "service": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "description",
+        "path",
+        "openapi",
+        "port_default",
+        "health",
+        "migrations",
+        "env",
+        "calls",
+        "azure"
+      ],
+      "properties": {
+        "description": { "type": "string", "minLength": 1 },
+        "path": { "$ref": "#/$defs/repoPath" },
+        "openapi": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_./-]+/openapi\\.(yaml|json)$"
+        },
+        "port_default": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "health": { "type": "string", "const": "/health" },
+        "migrations": { "$ref": "#/$defs/repoPath" },
+        "env": {
+          "description": "Every environment variable the service reads.",
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]*$" },
+          "additionalProperties": { "$ref": "#/$defs/envVar" }
+        },
+        "calls": {
+          "description": "Calls to the other service across the seam (empty if none).",
+          "type": "array",
+          "items": { "$ref": "#/$defs/call" }
+        },
+        "azure": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["container_app", "sql_database"],
+          "properties": {
+            "container_app": { "$ref": "#/$defs/azureName" },
+            "sql_database": { "$ref": "#/$defs/azureName" }
+          }
+        }
+      }
+    },
+    "envVar": {
+      "description": "A secret has secret: true and no default; any other variable has a default.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["description"],
+      "properties": {
+        "default": { "type": ["string", "integer", "number", "boolean"] },
+        "secret": { "type": "boolean" },
+        "description": { "type": "string", "minLength": 1 }
+      },
+      "if": {
+        "required": ["secret"],
+        "properties": { "secret": { "const": true } }
+      },
+      "then": { "not": { "required": ["default"] } },
+      "else": { "required": ["default"] }
+    },
+    "call": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["service", "url_env", "endpoints", "timeout_s", "on_failure"],
+      "properties": {
+        "service": { "$ref": "#/$defs/serviceName" },
+        "url_env": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]*$" },
+        "endpoints": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^(GET|POST|PUT|PATCH|DELETE) /\\S*$"
+          }
+        },
+        "timeout_s": { "type": "number", "exclusiveMinimum": 0 },
+        "on_failure": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

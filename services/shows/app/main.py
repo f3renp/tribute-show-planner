@@ -12,6 +12,7 @@ from werkzeug.exceptions import HTTPException
 import config
 import migrate
 from cors import allow_ui_origin
+from health import add_health_route
 from request_log import log_requests
 from shows.api import bp as api_bp
 
@@ -23,6 +24,7 @@ def create_app():
     log_requests(app)
     allow_ui_origin(app)
     app.register_blueprint(api_bp)
+    add_health_route(app)
 
     @app.errorhandler(HTTPException)
     def error_as_json(error):
@@ -35,10 +37,6 @@ def create_app():
         response.data = json.dumps({"errors": [error.description]})
         response.content_type = "application/json"
         return response
-
-    @app.route("/health")
-    def health():
-        return {"status": "ok"}
 
     return app
 

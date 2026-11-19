@@ -1,0 +1,4 @@
+# Only for the cross-seam integration test (tests/integration), run by the
+# integration job in CI against the compose stack. Not in any image.
+pytest==9.1.1
+ruff==0.17.3

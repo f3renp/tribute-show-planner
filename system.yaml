@@ -1,0 +1,75 @@
+# yaml-language-server: $schema=./system.schema.json
+# The whole system in one file: both services, their settings, the call
+# across the seam and the Azure resources. Format: system.schema.json (our
+# own, written from the example in the brief, §8a). CI validates this file
+# against it, and each service's tests/test_system_yaml.py checks that "env"
+# lists exactly the variables its app/config.py reads, with the same defaults.
+student: fmedina.ieu2024
+prefix: fmedina-ieu2024
+# Placeholder until the Storage static website exists (Friday 20 Nov):
+# .invalid is a reserved domain that never resolves.
+public_url: https://set-on-friday.invalid
+ui:
+  path: ui
+  # The professor's guide uses an Azure Storage static website instead of a
+  # Static Web App. Account names allow only lowercase letters and digits.
+  # Name to confirm on Friday against the guide.
+  storage_account: fmedinaieu2024ui
+  calls: [catalogue, shows]
+azure:
+  resource_group: rg-fmedina-ieu2024
+  container_apps_environment: fmedina-ieu2024-env
+  sql_server: fmedina-ieu2024-sql
+  registry: ghcr.io/f3renp
+  # User-assigned managed identity the pipeline signs in with (OIDC).
+  managed_identity: fmedina-ieu2024-github
+services:
+  catalogue:
+    description: Songs and the outfits they are performed in; retire and reactivate songs.
+    path: services/catalogue
+    openapi: services/catalogue/openapi.yaml
+    port_default: 8000
+    health: /health
+    migrations: services/catalogue/migrations
+    env:
+      PORT: { default: 8000, description: Port the service listens on }
+      DATABASE_URL: { secret: true, description: "Connection string of the catalogue database (mssql://user:password@host:1433/database)" }
+      DB_CONNECT_ATTEMPTS: { default: 8, description: "Connection attempts at startup, with backoff (about a minute in all)" }
+      DB_LOGIN_TIMEOUT_SECONDS: { default: 10, description: Seconds one connection attempt may take }
+      HEALTH_DB_TIMEOUT_SECONDS: { default: 2, description: Seconds /health waits for the database to accept a login (one attempt) }
+      GIT_SHA: { default: dev, description: "Commit the image was built from, shown by /health; set by CI as a build argument" }
+      CORS_ORIGINS: { default: "http://localhost:8080", description: Origins (comma-separated) whose pages may call the API from the browser }
+    calls: []
+    azure:
+      container_app: fmedina-ieu2024-catalogue
+      sql_database: fmedina-ieu2024-catalogue-db
+  shows:
+    description: Shows and their setlists of songs and breaks, with the six setlist checks.
+    path: services/shows
+    openapi: services/shows/openapi.yaml
+    port_default: 8000
+    health: /health
+    migrations: services/shows/migrations
+    env:
+      PORT: { default: 8000, description: Port the service listens on }
+      DATABASE_URL: { secret: true, description: "Connection string of the shows database (mssql://user:password@host:1433/database)" }
+      DB_CONNECT_ATTEMPTS: { default: 8, description: "Connection attempts at startup, with backoff (about a minute in all)" }
+      DB_LOGIN_TIMEOUT_SECONDS: { default: 10, description: Seconds one connection attempt may take }
+      HEALTH_DB_TIMEOUT_SECONDS: { default: 2, description: Seconds /health waits for the database to accept a login (one attempt) }
+      GIT_SHA: { default: dev, description: "Commit the image was built from, shown by /health; set by CI as a build argument" }
+      CATALOGUE_URL: { default: "http://localhost:8001", description: "Base URL of the catalogue service (compose: http://catalogue:8000)" }
+      CATALOGUE_TIMEOUT: { default: 5, description: Seconds to wait for the catalogue before giving up on a call }
+      CORS_ORIGINS: { default: "http://localhost:8080", description: Origins (comma-separated) whose pages may call the API from the browser }
+    calls:
+      - service: catalogue
+        url_env: CATALOGUE_URL
+        endpoints: ["GET /api/songs", "GET /api/songs/active"]
+        timeout_s: 5
+        on_failure: >-
+          The show still loads from the shows database, degraded: song details,
+          running time and checks are null with catalogue_available false, and
+          the UI says the catalogue is not answering; adding a song is refused with
+          503 and nothing is saved. Shows, breaks, moving and removing still work.
+    azure:
+      container_app: fmedina-ieu2024-shows
+      sql_database: fmedina-ieu2024-shows-db

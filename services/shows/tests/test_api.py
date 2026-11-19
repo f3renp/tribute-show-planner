@@ -16,8 +16,10 @@ UI_ORIGIN = "http://localhost:8080"
 
 
 @pytest.fixture
-def client(database, monkeypatch):
-    """A Flask test client on a fresh shows_test database."""
+def client(database, catalogue, monkeypatch):
+    """A Flask test client on a fresh shows_test database, with an empty
+    fake catalogue, so no test calls the real one (with nothing listening,
+    each real call takes ~4 s to fail on Windows)."""
     monkeypatch.setattr(config, "CORS_ORIGINS", [UI_ORIGIN])
     return main.create_app().test_client()
 
@@ -75,12 +77,6 @@ def save_show_with_song_7_and_a_break():
 
 def item_ids(show_id):
     return [item["id"] for item in repository.list_items(show_id)]
-
-
-def test_health_says_ok(client):
-    response = client.get("/health")
-    assert response.status_code == 200
-    assert response.get_json() == {"status": "ok"}
 
 
 # Listing and creating shows ---------------------------------------------
@@ -310,7 +306,9 @@ def test_add_break_with_no_fields_lists_every_error_at_once(client):
 
 
 def test_add_break_to_an_unknown_show_is_404(client):
-    response = client.post("/api/shows/9999/breaks", json={"break_label": "Rest", "break_seconds": 60})
+    response = client.post(
+        "/api/shows/9999/breaks", json={"break_label": "Rest", "break_seconds": 60}
+    )
     assert response.status_code == 404
 
 
@@ -321,7 +319,9 @@ def three_breaks(client):
     """A show with breaks A, B, C. Return (show_id, [item ids in order])."""
     show_id = create_show(client)
     for label in ["A", "B", "C"]:
-        client.post(f"/api/shows/{show_id}/breaks", json={"break_label": label, "break_seconds": 60})
+        client.post(
+            f"/api/shows/{show_id}/breaks", json={"break_label": label, "break_seconds": 60}
+        )
     return show_id, item_ids(show_id)
 
 

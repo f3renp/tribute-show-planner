@@ -22,6 +22,16 @@ DB_CONNECT_ATTEMPTS = int(os.environ.get("DB_CONNECT_ATTEMPTS", "8"))
 # Seconds one connection attempt may take before it counts as failed.
 DB_LOGIN_TIMEOUT_SECONDS = int(os.environ.get("DB_LOGIN_TIMEOUT_SECONDS", "10"))
 
+# Seconds /health waits for the database to accept a login (one attempt, no
+# retries), so a health check answers within the Docker HEALTHCHECK's time
+# limit. The host name lookup before the login is not included.
+HEALTH_DB_TIMEOUT_SECONDS = int(os.environ.get("HEALTH_DB_TIMEOUT_SECONDS", "2"))
+
+# Commit the running code was built from, shown by /health. The Dockerfile
+# sets it from the GIT_SHA build argument, which CI fills with the commit
+# SHA; "dev" means a local build or a run outside Docker.
+GIT_SHA = os.environ.get("GIT_SHA", "dev")
+
 # Folder with the numbered migration files: services/catalogue/migrations,
 # next to app/ (the Dockerfile keeps the same layout).
 MIGRATIONS_DIR = os.path.join(

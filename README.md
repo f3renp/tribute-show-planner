@@ -114,6 +114,8 @@ lists the ones you may want to change.
 | `DATABASE_URL` | both | none (required, holds a password) | `mssql://user:password@host:1433/database`. Compose sets it with a local-only password. |
 | `DB_CONNECT_ATTEMPTS` | both | `8` | Connection attempts, with waits of 1, 2, 4, 8, 15... s between them (about a minute). |
 | `DB_LOGIN_TIMEOUT_SECONDS` | both | `10` | Seconds one connection attempt may take. |
+| `HEALTH_DB_TIMEOUT_SECONDS` | both | `2` | Seconds `/health` waits for the database to accept a login (one attempt, no retries). |
+| `GIT_SHA` | both | `dev` | Commit shown as `version` by `/health`. Set in the image by the Dockerfile's `GIT_SHA` build argument, which CI fills with the commit SHA. |
 | `CATALOGUE_URL` | shows | `http://localhost:8001` | Where shows calls the catalogue API. Compose sets `http://catalogue:8000`. |
 | `CATALOGUE_TIMEOUT` | shows | `5` | Seconds to wait for the catalogue. |
 | `CORS_ORIGINS` | both | `http://localhost:8080` | Comma-separated origins whose pages may call the API from the browser. Empty allows none. Compose sets `http://localhost:8080`. |
@@ -122,37 +124,108 @@ The UI's only settings are the two service URLs in `ui/config.js`
 (`CATALOGUE_URL` `http://localhost:8001`, `SHOWS_URL`
 `http://localhost:8002`). No other UI file contains a URL.
 
+## System description
+
+- `services/catalogue/openapi.yaml` and `services/shows/openapi.yaml`:
+  OpenAPI 3.1 documents of every endpoint, `/health` included, written by
+  hand from the routes.
+- `system.yaml`: both services, every environment variable they read with
+  its default (secrets marked `secret: true`, with no default), the call
+  across the seam, and the Azure resources.
+- `system.schema.json`: the format of `system.yaml`. **No schema was
+  provided with the brief, so this one is our own**, written from the
+  example in the brief (§8a), with the UI on an Azure Storage static
+  website (`ui.storage_account`) as in the professor's Azure guide, and the
+  pipeline's managed identity (`azure.managed_identity`). Every object is
+  closed and every field required, so a missing, misspelt or extra field
+  is an error.
+
+CI checks them in its `validate` job (with the versions pinned there). To
+run the same checks locally, from the repository root:
+
+```
+uvx check-jsonschema==0.39.0 --schemafile system.schema.json system.yaml
+uvx --from openapi-spec-validator==0.9.0 openapi-spec-validator services/catalogue/openapi.yaml services/shows/openapi.yaml
+```
+
+The tests also compare these files with the code, so they cannot drift:
+`tests/test_system_yaml.py` (each service) checks that `system.yaml` lists
+exactly the variables `app/config.py` reads, with the same defaults;
+`tests/test_openapi.py` checks that the documented paths are exactly the
+app's routes, and in shows that the catalogue's song schemas are the same
+in both documents.
+
 ## Tests and coverage
 
 Each service has its own tests in its `tests/` folder. The database tests
 run on that service's `_test` database (`catalogue_test`, `shows_test`) in
-the compose SQL Server, emptied before every test; start it first with
-`docker compose up -d sqlserver db-init`. The shows tests never call the
+the compose SQL Server; start it first with
+`docker compose up -d sqlserver db-init`. The schema is built once per
+run, and every test starts with empty tables and ids from 1
+(`tests/conftest.py`). The shows tests never call the
 real catalogue: they use a fake one (the `catalogue` fixture in
 `services/shows/tests/conftest.py`).
 
-The test tools are in each service's `requirements-dev.txt`, which also
-installs `requirements.txt`. The images only install `requirements.txt`.
+The test and lint tools are in each service's `requirements-dev.txt`,
+which also installs `requirements.txt`. The images only install
+`requirements.txt`. These are the commands CI runs: lint with ruff (rules
+in `ruff.toml`), then the tests with a coverage gate. Coverage is measured
+on everything in `app/` (`.coveragerc` leaves out the tests), and the run
+fails below 70%.
 
 ```
 cd services/catalogue
 pip install -r requirements-dev.txt
-python -m pytest --cov=app --cov-report=term-missing
+ruff check .
+python -m pytest --cov --cov-report=term-missing --cov-fail-under=70
 cd ../shows
 pip install -r requirements-dev.txt
-python -m pytest --cov=app --cov-report=term-missing
+ruff check .
+python -m pytest --cov --cov-report=term-missing --cov-fail-under=70
 ```
 
-Result on 2026-11-18:
+Result on 2026-11-19:
 
-| Service | Tests | Coverage |
-|---------|-------|----------|
-| catalogue | 153 passed | 99% |
-| shows | 154 passed | 99% |
+| Service | Tests | Coverage | Time (laptop) |
+|---------|-------|----------|---------------|
+| catalogue | 168 passed | 99% | ~60 s |
+| shows | 171 passed | 99% | ~32 s |
+
+### Cross-seam integration test
+
+`tests/integration/test_seam.py` (at the repository root, since it tests
+both services together) runs against the whole system started by compose,
+with the real catalogue, not a fake. It adds a real catalogue song to a new
+show and checks that the overview has exactly the catalogue's song details
+and that the checks ran on them. Then it stops the catalogue
+(`docker compose stop catalogue`) and checks that the same show comes back
+degraded (200, `catalogue_available: false`, checks `null`) within 15 s,
+that adding a song is refused with 503 and saves nothing, and that shows'
+`/health` is still 200. It starts the catalogue again at the end and
+deletes the shows it created. CI runs it in the `integration` job.
+
+```
+docker compose up -d --build
+pip install -r tests/integration/requirements.txt
+python -m pytest tests/integration -v
+```
+
+Result on 2026-11-19: 2 passed in 19 s. With the catalogue stopped, the
+degraded overview took 3-4 s, mostly the failed name lookup of `catalogue`.
 
 Since the pages became JSON APIs (18 Nov), each service's `tests/test_api.py`
 tests every endpoint and status code through Flask's test client, so
 `api.py` is covered too, not only the rules and services (ADR-4).
+
+## Code copied between the services
+
+The two services share no code, so each can be built, tested and deployed
+on its own (each Docker build context is its own folder). The code both
+need is copied, and ADR-9 lists every copy and why. These files must stay
+byte-identical in `services/catalogue` and `services/shows`, and the CI
+`validate` job fails if any byte differs: `app/db.py`, `app/migrate.py`,
+`app/request_log.py`, `app/cors.py`, `app/health.py` and
+`tests/test_system_yaml.py`.
 
 ## Assignment 1 container contract check (§7)
 
@@ -205,12 +278,19 @@ Notes:
 - `.env.example`: the optional settings for compose.
 - `services/<name>/Dockerfile`, `.dockerignore`, `requirements.txt`: how
   each image is built. Only `app/` is copied into the image.
-- `services/<name>/requirements-dev.txt`: pytest and pytest-cov, for the
-  tests only.
+- `services/<name>/requirements-dev.txt`: pytest, pytest-cov, ruff and
+  PyYAML, for the tests and lint only. `ruff.toml`: the lint rules.
+- `services/<name>/openapi.yaml`: the service's API (see System description).
+- `system.yaml`, `system.schema.json`: the whole system and its format.
+- `tests/integration/`: the cross-seam integration test and its
+  `requirements.txt` (pytest and ruff, for the CI `integration` job only).
 - `services/<name>/app/main.py`: builds the Flask app and starts waitress.
 - `services/<name>/app/config.py`: reads that service's settings.
-- `services/<name>/app/db.py` and `schema.sql`: SQLite connections and the
-  tables that service owns.
+- `services/<name>/app/db.py`: SQL Server connections, with retries and
+  backoff. `app/migrate.py` and `migrations/`: the versioned migrations,
+  applied in order at startup.
+- `services/<name>/app/health.py`: `GET /health` (the same file in both
+  services).
 - `services/catalogue/app/seed.py`: the demo catalogue.
 - `services/catalogue/app/catalogue/`: `api.py` (the JSON API, for the
   browser and the shows service), `service.py` (rules and validation),

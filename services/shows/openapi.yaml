@@ -1,0 +1,448 @@
+openapi: 3.1.0
+info:
+  title: Shows service
+  version: 1.0.0
+  description: |
+    Shows and their setlists (songs and breaks, in order), with the six
+    setlist checks. Used by the static UI (ui/) from the browser. Song
+    details come from the catalogue service over HTTP (GET /api/songs and
+    GET /api/songs/active in services/catalogue/openapi.yaml).
+
+    Written by hand from app/shows/api.py, app/health.py and app/cors.py;
+    tests/test_openapi.py checks that every route of the app is listed here
+    and that the catalogue schemas below match the catalogue's document.
+
+    Every error is a JSON object {"errors": ["message", ...]}, also for an
+    unknown path (404), a wrong method (405) and an unexpected error (500,
+    with a generic message). Request bodies are JSON objects; numbers may
+    also be sent as text ("90"), since every value is validated as text.
+
+    CORS: only the origins in CORS_ORIGINS get Access-Control-Allow-Origin.
+    A POST, PUT or DELETE sent from a browser page on any other origin is
+    refused with 403 before it runs. Requests with no Origin header (curl)
+    are not affected. Flask answers OPTIONS (preflight) on every path.
+
+    Catalogue down: every read still works. A show's overview comes back
+    degraded (catalogue_available false, song details and check results
+    null), and adding a song is refused with 503, since it cannot be checked.
+servers:
+  - url: http://localhost:8002
+    description: docker compose
+
+paths:
+  /health:
+    get:
+      summary: Can the service read and write its own database?
+      description: Checks only the shows database; it never calls the catalogue.
+      operationId: health
+      responses:
+        "200":
+          description: The database can be read and written.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Health" }
+              example: { status: ok, db: ok, version: 3f2c1e9 }
+        "503":
+          description: The database cannot be reached, read or written.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Health" }
+              example: { status: error, db: error, version: 3f2c1e9 }
+
+  /api/shows:
+    get:
+      summary: Every show, the soonest first
+      operationId: listShows
+      responses:
+        "200":
+          description: All shows.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Show" }
+    post:
+      summary: Add a show (with an empty setlist)
+      operationId: createShow
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ShowInput" }
+      responses:
+        "201":
+          description: The saved show.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Show" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /api/shows/{show_id}:
+    parameters:
+      - $ref: "#/components/parameters/ShowId"
+    get:
+      summary: The show's overview (setlist and checks), even if the catalogue is down
+      operationId: getShow
+      responses:
+        "200":
+          description: The overview.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Overview" }
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      summary: Replace every field of a show
+      operationId: updateShow
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ShowInput" }
+      responses:
+        "200":
+          description: The new overview (a new length changes the running time check).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Overview" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      summary: Delete a show and its whole setlist
+      operationId: deleteShow
+      responses:
+        "204":
+          description: Deleted. No body.
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/shows/{show_id}/songs:
+    parameters:
+      - $ref: "#/components/parameters/ShowId"
+    post:
+      summary: Add a song at the end of the setlist
+      description: The song is checked with the catalogue first (it must exist and be active).
+      operationId: addSong
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SongChoice" }
+      responses:
+        "201":
+          description: The new overview.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Overview" }
+        "400":
+          description: No song chosen, or the song is unknown or retired. Nothing is saved.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Errors" }
+              example: { errors: ["That song is retired."] }
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "503":
+          description: The catalogue is unavailable, so the song cannot be checked. Nothing is saved.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Errors" }
+              example:
+                errors:
+                  - "Catalogue service unavailable: the song could not be checked and was not added. Try again later."
+
+  /api/shows/{show_id}/breaks:
+    parameters:
+      - $ref: "#/components/parameters/ShowId"
+    post:
+      summary: Add a break at the end of the setlist
+      operationId: addBreak
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BreakInput" }
+      responses:
+        "201":
+          description: The new overview.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Overview" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/shows/{show_id}/items/{item_id}/move:
+    parameters:
+      - $ref: "#/components/parameters/ShowId"
+      - $ref: "#/components/parameters/ItemId"
+    post:
+      summary: Move an item one place up or down
+      description: The first item moving up, or the last moving down, stays where it is.
+      operationId: moveItem
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MoveInput" }
+      responses:
+        "200":
+          description: The new overview.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Overview" }
+        "400":
+          description: The direction is not up or down.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Errors" }
+              example: { errors: ["Direction must be up or down."] }
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/shows/{show_id}/items/{item_id}:
+    parameters:
+      - $ref: "#/components/parameters/ShowId"
+      - $ref: "#/components/parameters/ItemId"
+    delete:
+      summary: Remove an item; the items after it move up one position
+      operationId: removeItem
+      responses:
+        "200":
+          description: The new overview.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Overview" }
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+components:
+  parameters:
+    ShowId:
+      name: show_id
+      in: path
+      required: true
+      description: Digits only; anything else is a 404.
+      schema: { type: integer, minimum: 1 }
+    ItemId:
+      name: item_id
+      in: path
+      required: true
+      description: A setlist item of this show; digits only.
+      schema: { type: integer, minimum: 1 }
+
+  responses:
+    BadRequest:
+      description: |
+        The body is not a JSON object, or its values do not validate. Every
+        field error is listed at once. Nothing is saved.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Errors" }
+          example: { errors: ["Name is required.", "Date must look like 2026-10-31."] }
+    Forbidden:
+      description: Sent from a browser page whose origin is not in CORS_ORIGINS. Nothing changes.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Errors" }
+          example: { errors: ["Origin http://evil.example may not change data here."] }
+    NotFound:
+      description: No show with this id, or no item with this id in this show.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Errors" }
+          example: { errors: ["Show 4 has no item 9."] }
+
+  schemas:
+    Errors:
+      type: object
+      required: [errors]
+      properties:
+        errors:
+          type: array
+          minItems: 1
+          items: { type: string }
+
+    Health:
+      type: object
+      required: [status, db, version]
+      properties:
+        status: { type: string, enum: [ok, error] }
+        db: { type: string, enum: [ok, error] }
+        version:
+          type: string
+          description: Commit SHA the image was built from (GIT_SHA), or "dev".
+
+    Show:
+      type: object
+      required: [id, name, venue, show_date, max_minutes]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        venue: { type: string }
+        show_date: { type: string, format: date, example: "2026-10-31" }
+        max_minutes: { type: integer, minimum: 1, maximum: 240 }
+
+    ShowInput:
+      type: object
+      required: [name, venue, show_date, max_minutes]
+      properties:
+        name: { type: string, maxLength: 200 }
+        venue: { type: string, maxLength: 200 }
+        show_date: { type: string, description: YYYY-MM-DD., example: "2026-10-31" }
+        max_minutes: { type: [integer, string], description: 1 to 240., example: 90 }
+
+    SongChoice:
+      type: object
+      required: [song_id]
+      properties:
+        song_id: { type: [integer, string], description: A song id in the catalogue. }
+
+    BreakInput:
+      type: object
+      required: [break_label, break_seconds]
+      properties:
+        break_label: { type: string, maxLength: 100 }
+        break_seconds: { type: [integer, string], description: 1 to 1800., example: 90 }
+
+    MoveInput:
+      type: object
+      required: [direction]
+      properties:
+        direction: { type: string, enum: [up, down] }
+
+    # The two catalogue schemas below are copies of SongForShows and
+    # ActiveSong in services/catalogue/openapi.yaml: what this service gets
+    # from GET /api/songs and GET /api/songs/active. tests/test_openapi.py
+    # checks that they stay identical.
+    CatalogueSong:
+      type: object
+      description: A song as GET /api/songs returns it to the shows service.
+      required:
+        - id
+        - title
+        - album
+        - year
+        - duration_seconds
+        - energy
+        - kind
+        - outfit_id
+        - active
+        - outfit_name
+        - outfit_change_seconds
+      properties:
+        id: { type: integer }
+        title: { type: string }
+        album: { type: string }
+        year: { type: integer }
+        duration_seconds: { type: integer, minimum: 1 }
+        energy: { type: integer, minimum: 1, maximum: 5 }
+        kind: { type: string, enum: [dance, ballad] }
+        outfit_id: { type: integer }
+        active: { type: integer, enum: [0, 1], description: "1 = active, 0 = retired." }
+        outfit_name: { type: string }
+        outfit_change_seconds: { type: integer, minimum: 0 }
+
+    CatalogueActiveSong:
+      type: object
+      description: A song as GET /api/songs/active returns it to the shows service.
+      required:
+        - id
+        - title
+        - album
+        - year
+        - duration_seconds
+        - energy
+        - kind
+        - outfit_id
+        - active
+        - outfit_name
+      properties:
+        id: { type: integer }
+        title: { type: string }
+        album: { type: string }
+        year: { type: integer }
+        duration_seconds: { type: integer, minimum: 1 }
+        energy: { type: integer, minimum: 1, maximum: 5 }
+        kind: { type: string, enum: [dance, ballad] }
+        outfit_id: { type: integer }
+        active: { type: integer, enum: [0, 1], description: "1 = active, 0 = retired." }
+        outfit_name: { type: string }
+
+    DurationText:
+      type: object
+      required: [duration]
+      properties:
+        duration:
+          type: string
+          description: duration_seconds as minutes:seconds.
+          example: "4:54"
+
+    SetlistItem:
+      type: object
+      required: [id, show_id, position, item_type, song_id, break_label, break_seconds, song]
+      properties:
+        id: { type: integer }
+        show_id: { type: integer }
+        position: { type: integer, minimum: 1, description: "1, 2, 3... with no gaps." }
+        item_type: { type: string, enum: [song, break] }
+        song_id: { type: [integer, "null"], description: Set for a song item; null for a break. }
+        break_label: { type: [string, "null"], description: Set for a break; null for a song item. }
+        break_seconds: { type: [integer, "null"], description: Set for a break; null for a song item. }
+        song:
+          description: |
+            The catalogue's details for a song item, plus its duration as
+            text. null for a break, for a song the catalogue no longer has,
+            and for every item while the catalogue is unavailable.
+          oneOf:
+            - allOf:
+                - $ref: "#/components/schemas/CatalogueSong"
+                - $ref: "#/components/schemas/DurationText"
+            - type: "null"
+
+    Overview:
+      type: object
+      description: |
+        Everything the show page needs. When the catalogue is unavailable,
+        catalogue_available is false, total_seconds, total_duration,
+        over_limit and problems are null (the checks were skipped; an empty
+        problems list would mean "no problems") and songs is empty.
+      required: [show, catalogue_available, items, total_seconds, total_duration, over_limit, problems, songs]
+      properties:
+        show: { $ref: "#/components/schemas/Show" }
+        catalogue_available: { type: boolean }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/SetlistItem" }
+        total_seconds: { type: [integer, "null"], description: Songs plus breaks. }
+        total_duration: { type: [string, "null"], description: total_seconds as minutes:seconds., example: "62:15" }
+        over_limit: { type: [boolean, "null"], description: total_seconds is above max_minutes. }
+        problems:
+          type: [array, "null"]
+          description: One message per broken check, in the order of the six checks.
+          items: { type: string }
+        songs:
+          type: array
+          description: The active songs that can be added (from GET /api/songs/active), with duration.
+          items:
+            allOf:
+              - $ref: "#/components/schemas/CatalogueActiveSong"
+              - $ref: "#/components/schemas/DurationText"

@@ -12,7 +12,8 @@ import main
 # e.g. "GET /health 200 3.2ms"
 LOG_LINE = re.compile(r"^(GET|POST) (\S+) (\d{3}) \d+\.\dms$")
 
-pytestmark = pytest.mark.usefixtures("database")
+# demo_catalogue: create_app() finds a full catalogue and skips the slow seed.
+pytestmark = pytest.mark.usefixtures("demo_catalogue")
 
 
 def printed_lines(capsys):
