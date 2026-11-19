@@ -49,6 +49,7 @@ def fake_connect(monkeypatch):
 
     def connect(**settings):
         state["calls"] += 1
+        state["login_timeout"] = settings["login_timeout"]
         if state["calls"] <= state["failures"]:
             raise pymssql.OperationalError(40613, b"Database is not currently available.")
         return "connection"
@@ -75,3 +76,16 @@ def test_get_connection_raises_after_the_last_attempt(fake_connect):
         db.get_connection(attempts=3)
     assert sleeps == [1, 2]
     assert state["calls"] == 3
+
+
+def test_get_connection_uses_the_login_timeout_from_config(fake_connect, monkeypatch):
+    state, _ = fake_connect
+    monkeypatch.setattr(config, "DB_LOGIN_TIMEOUT_SECONDS", 10)
+    db.get_connection(attempts=1)
+    assert state["login_timeout"] == 10
+
+
+def test_get_connection_can_be_given_a_shorter_login_timeout(fake_connect):
+    state, _ = fake_connect
+    db.get_connection(attempts=1, login_timeout=2)
+    assert state["login_timeout"] == 2

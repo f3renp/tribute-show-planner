@@ -55,21 +55,24 @@ def error_code(error):
     return error.args[0] if error.args else "unknown"
 
 
-def get_connection(attempts=None):
+def get_connection(attempts=None, login_timeout=None):
     """Open a connection, retrying with backoff while the server refuses it.
 
     SQL Server may still be starting (docker compose) or the Azure database
     may be resuming from auto-pause (error 40613). Both refuse connections
     for a while and then work. After the last attempt the error is raised.
+
+    attempts and login_timeout default to the settings in config.py;
+    /health passes 1 and a short timeout so it answers quickly.
     """
     if attempts is None:
         attempts = config.DB_CONNECT_ATTEMPTS
+    if login_timeout is None:
+        login_timeout = config.DB_LOGIN_TIMEOUT_SECONDS
     settings = parse_database_url(config.DATABASE_URL)
     for attempt in range(1, attempts + 1):
         try:
-            return pymssql.connect(
-                **settings, login_timeout=config.DB_LOGIN_TIMEOUT_SECONDS
-            )
+            return pymssql.connect(**settings, login_timeout=login_timeout)
         except pymssql.OperationalError as error:
             if attempt == attempts:
                 raise

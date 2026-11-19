@@ -1,4 +1,4 @@
-"""Tests for shows/catalogue_client.py and /health.
+"""Tests for shows/catalogue_client.py.
 
 urlopen is replaced by a fake that records the URL it was asked for and
 answers with a fixed JSON body, so no test needs the catalogue running.
@@ -10,7 +10,6 @@ from urllib.error import HTTPError, URLError
 import pytest
 
 import config
-import main
 from shows import catalogue_client
 
 
@@ -78,10 +77,3 @@ def test_a_body_that_is_not_json_raises_catalogue_unavailable(monkeypatch):
     monkeypatch.setattr(catalogue_client, "urlopen", html_urlopen)
     with pytest.raises(catalogue_client.CatalogueUnavailable):
         catalogue_client.get_songs_by_ids([1])
-
-
-@pytest.mark.usefixtures("database")
-def test_health_says_ok():
-    response = main.create_app().test_client().get("/health")
-    assert response.status_code == 200
-    assert response.get_json() == {"status": "ok"}

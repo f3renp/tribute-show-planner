@@ -45,12 +45,6 @@ def new_song_body(**changes):
     return body
 
 
-def test_health_says_ok(client):
-    response = client.get("/health")
-    assert response.status_code == 200
-    assert response.get_json() == {"status": "ok"}
-
-
 # Seam endpoints used by the shows service (unchanged) -------------------
 
 

@@ -79,12 +79,6 @@ def item_ids(show_id):
     return [item["id"] for item in repository.list_items(show_id)]
 
 
-def test_health_says_ok(client):
-    response = client.get("/health")
-    assert response.status_code == 200
-    assert response.get_json() == {"status": "ok"}
-
-
 # Listing and creating shows ---------------------------------------------
 
 

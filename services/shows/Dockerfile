@@ -25,12 +25,24 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY app/ ./app/
 COPY migrations/ ./migrations/
 
+# Commit this image is built from, shown by GET /health. CI passes
+# --build-arg GIT_SHA=<commit SHA>; a local build says "dev". After the
+# COPY lines, so a new commit does not reinstall the packages.
+ARG GIT_SHA=dev
+ENV GIT_SHA=$GIT_SHA
+
 USER appuser
 
 EXPOSE 8000
 
-HEALTHCHECK --interval=10s --timeout=3s --start-period=10s --retries=3 \
-  CMD ["python", "-c", "import os, urllib.request; urllib.request.urlopen('http://127.0.0.1:%s/health' % os.environ['PORT'], timeout=2)"]
+# urlopen raises on any status that is not 2xx, so a 503 from /health (the
+# database cannot be read or written) exits with 1 and counts as a failure.
+# /health tries one connection with a 2 s login timeout. If the database's
+# host name cannot be found at all (compose with sqlserver stopped), the
+# name lookup alone takes ~6 s; a check that runs past --timeout also
+# counts as a failure, so the container is still marked unhealthy.
+HEALTHCHECK --interval=10s --timeout=5s --start-period=10s --retries=3 \
+  CMD ["python", "-c", "import os, urllib.request; urllib.request.urlopen('http://127.0.0.1:%s/health' % os.environ['PORT'], timeout=4)"]
 
 # main.py binds 0.0.0.0 and reads PORT. Python puts app/ (the script's
 # folder) on the import path, so "import config" works.

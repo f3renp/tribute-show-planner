@@ -74,3 +74,5 @@ jobs:
           context: services/${{ matrix.service }}
           push: ${{ github.ref == 'refs/heads/main' }}
           tags: ghcr.io/${{ env.OWNER }}/tribute-${{ matrix.service }}:${{ github.sha }}
+          # /health reports this as "version": the same SHA as the image tag.
+          build-args: GIT_SHA=${{ github.sha }}
