@@ -191,9 +191,41 @@ Result on 2026-11-19:
 | catalogue | 168 passed | 99% | ~60 s |
 | shows | 171 passed | 99% | ~32 s |
 
+### Cross-seam integration test
+
+`tests/integration/test_seam.py` (at the repository root, since it tests
+both services together) runs against the whole system started by compose,
+with the real catalogue, not a fake. It adds a real catalogue song to a new
+show and checks that the overview has exactly the catalogue's song details
+and that the checks ran on them. Then it stops the catalogue
+(`docker compose stop catalogue`) and checks that the same show comes back
+degraded (200, `catalogue_available: false`, checks `null`) within 15 s,
+that adding a song is refused with 503 and saves nothing, and that shows'
+`/health` is still 200. It starts the catalogue again at the end and
+deletes the shows it created. CI runs it in the `integration` job.
+
+```
+docker compose up -d --build
+pip install -r tests/integration/requirements.txt
+python -m pytest tests/integration -v
+```
+
+Result on 2026-11-19: 2 passed in 19 s. With the catalogue stopped, the
+degraded overview took 3-4 s, mostly the failed name lookup of `catalogue`.
+
 Since the pages became JSON APIs (18 Nov), each service's `tests/test_api.py`
 tests every endpoint and status code through Flask's test client, so
 `api.py` is covered too, not only the rules and services (ADR-4).
+
+## Code copied between the services
+
+The two services share no code, so each can be built, tested and deployed
+on its own (each Docker build context is its own folder). The code both
+need is copied, and ADR-9 lists every copy and why. These files must stay
+byte-identical in `services/catalogue` and `services/shows`, and the CI
+`validate` job fails if any byte differs: `app/db.py`, `app/migrate.py`,
+`app/request_log.py`, `app/cors.py`, `app/health.py` and
+`tests/test_system_yaml.py`.
 
 ## Assignment 1 container contract check (§7)
 
@@ -250,6 +282,8 @@ Notes:
   PyYAML, for the tests and lint only. `ruff.toml`: the lint rules.
 - `services/<name>/openapi.yaml`: the service's API (see System description).
 - `system.yaml`, `system.schema.json`: the whole system and its format.
+- `tests/integration/`: the cross-seam integration test and its
+  `requirements.txt` (pytest and ruff, for the CI `integration` job only).
 - `services/<name>/app/main.py`: builds the Flask app and starts waitress.
 - `services/<name>/app/config.py`: reads that service's settings.
 - `services/<name>/app/db.py`: SQL Server connections, with retries and

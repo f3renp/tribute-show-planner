@@ -1,8 +1,9 @@
 name: CI
 
 # Every push and every pull request lints and tests both services (with a
-# 70% coverage gate), validates system.yaml and the OpenAPI documents, and
-# builds both images. Only a push to main publishes the images to GHCR.
+# 70% coverage gate), validates system.yaml and the OpenAPI documents, runs
+# the cross-seam integration test on the compose stack, and builds both
+# images. Only a push to main publishes the images to GHCR.
 on:
   push:
   pull_request:
@@ -73,9 +74,53 @@ jobs:
         run: check-jsonschema --schemafile system.schema.json system.yaml
       - name: Validate each openapi.yaml against the OpenAPI specification
         run: openapi-spec-validator services/catalogue/openapi.yaml services/shows/openapi.yaml
+      # The services share no code: these files are copied into both on
+      # purpose (ADR-9). cmp fails the step on the first byte that differs,
+      # so a fix made in one copy only cannot go unnoticed.
+      - name: Check that the copied files are still identical
+        run: |
+          for file in app/db.py app/migrate.py app/request_log.py app/cors.py app/health.py tests/test_system_yaml.py; do
+            cmp services/catalogue/$file services/shows/$file
+          done
+
+  # The cross-seam test: shows calling the REAL catalogue, on the whole
+  # system started by compose (real images, real SQL Server, the compose
+  # network), then the same calls with the catalogue stopped.
+  integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # Random passwords for this run, as in the test job: compose reads
+      # them instead of its LocalOnly defaults.
+      - name: Make passwords for SQL Server
+        run: |
+          for name in MSSQL_SA_PASSWORD CATALOGUE_DB_PASSWORD SHOWS_DB_PASSWORD; do
+            password="Ci_$(openssl rand -hex 16)"
+            echo "::add-mask::$password"
+            echo "$name=$password" >> "$GITHUB_ENV"
+          done
+      # Builds both images and starts everything; up waits for each
+      # depends_on condition (SQL Server healthy, db-init done) on the way.
+      - name: Start the whole system
+        run: docker compose up -d --build
+      - run: pip install -r tests/integration/requirements.txt
+      # Same rules as the services' ruff.toml.
+      - name: Lint
+        run: ruff check tests/integration --line-length 100 --select E,W,F,I,B
+      # The test waits for both /health endpoints itself before it starts.
+      - name: Cross-seam integration test
+        run: python -m pytest tests/integration -v
+      - name: Service logs, if anything failed
+        if: failure()
+        run: docker compose logs catalogue shows
 
   images:
-    needs: [test, validate]
+    # Nothing is built for GHCR unless the tests, the system description
+    # and the cross-seam test all pass.
+    needs: [test, validate, integration]
     runs-on: ubuntu-latest
     permissions:
       contents: read

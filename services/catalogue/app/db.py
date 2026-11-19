@@ -1,4 +1,4 @@
-"""Connections to the catalogue's SQL Server database, and small helpers to
+"""Connections to this service's SQL Server database, and small helpers to
 run SQL. Only this file talks to pymssql.
 
 SQL uses pymssql's markers: %s for a value from a tuple, %(name)s for a
