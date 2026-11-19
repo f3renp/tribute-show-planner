@@ -1,4 +1,8 @@
-# Test tools, not installed in the image. Installs the app's packages too.
+# Test and lint tools, not installed in the image. Installs the app's packages too.
 -r requirements.txt
 pytest==9.1.1
 pytest-cov==7.1.0
+# Linter: ruff check . (settings in ruff.toml).
+ruff==0.17.3
+# Reads system.yaml and openapi.yaml in the tests that compare them with the code.
+PyYAML==6.0.3

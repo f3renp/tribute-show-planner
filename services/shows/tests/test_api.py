@@ -306,7 +306,9 @@ def test_add_break_with_no_fields_lists_every_error_at_once(client):
 
 
 def test_add_break_to_an_unknown_show_is_404(client):
-    response = client.post("/api/shows/9999/breaks", json={"break_label": "Rest", "break_seconds": 60})
+    response = client.post(
+        "/api/shows/9999/breaks", json={"break_label": "Rest", "break_seconds": 60}
+    )
     assert response.status_code == 404
 
 
@@ -317,7 +319,9 @@ def three_breaks(client):
     """A show with breaks A, B, C. Return (show_id, [item ids in order])."""
     show_id = create_show(client)
     for label in ["A", "B", "C"]:
-        client.post(f"/api/shows/{show_id}/breaks", json={"break_label": label, "break_seconds": 60})
+        client.post(
+            f"/api/shows/{show_id}/breaks", json={"break_label": label, "break_seconds": 60}
+        )
     return show_id, item_ids(show_id)
 
 

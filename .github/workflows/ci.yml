@@ -1,7 +1,8 @@
 name: CI
 
-# Every push and every pull request runs the tests and builds both images.
-# Only a push to main publishes the images to GHCR.
+# Every push and every pull request lints and tests both services (with a
+# 70% coverage gate), validates system.yaml and the OpenAPI documents, and
+# builds both images. Only a push to main publishes the images to GHCR.
 on:
   push:
   pull_request:
@@ -47,10 +48,34 @@ jobs:
           fi
           echo "TEST_DATABASE_URL=mssql://${{ matrix.service }}_app:${password}@127.0.0.1:1433/${{ matrix.service }}_test" >> "$GITHUB_ENV"
       - run: pip install -r requirements-dev.txt
-      - run: python -m pytest
+      # Rules in services/NAME/ruff.toml. Any finding fails the job.
+      - name: Lint
+        run: ruff check .
+      # Coverage of everything in app/ (the tests are left out by
+      # .coveragerc); below 70% fails the job. --cov-report shows which
+      # lines are missed.
+      - name: Test with the coverage gate
+        run: python -m pytest --cov --cov-report=term-missing --cov-fail-under=70
+
+  # The machine-readable description of the system (brief, section 8a).
+  # The tools are pinned here and installed only in CI, never in an image.
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install check-jsonschema==0.39.0 openapi-spec-validator==0.9.0
+      # Our own schema (none was provided): a missing, misspelt or extra
+      # field in system.yaml fails the job.
+      - name: Validate system.yaml against system.schema.json
+        run: check-jsonschema --schemafile system.schema.json system.yaml
+      - name: Validate each openapi.yaml against the OpenAPI specification
+        run: openapi-spec-validator services/catalogue/openapi.yaml services/shows/openapi.yaml
 
   images:
-    needs: test
+    needs: [test, validate]
     runs-on: ubuntu-latest
     permissions:
       contents: read

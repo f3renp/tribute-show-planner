@@ -10,7 +10,6 @@ from datetime import date
 
 from shows import catalogue_client, repository, rules
 from shows.catalogue_client import CatalogueUnavailable
-from shows.rules import format_duration
 
 # A show longer than 4 hours is a typo.
 MAX_SHOW_MINUTES = 4 * 60

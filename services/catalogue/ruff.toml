@@ -1,0 +1,22 @@
+# Lint settings for this service: ruff check . (from services/catalogue).
+# A dev tool only: ruff is in requirements-dev.txt, not in the image.
+
+line-length = 100
+target-version = "py312"
+
+# app/ and tests/ hold our own modules (config, db, catalogue, conftest...),
+# so the import sorting puts them after the third-party ones.
+src = ["app", "tests"]
+
+[lint]
+# E, W: pycodestyle errors and warnings (layout, whitespace).
+# F: pyflakes (unused imports and variables, undefined names).
+# I: imports sorted and grouped (standard library, third party, ours).
+# B: bugbear (likely bugs: mutable default arguments, except that hides
+#    errors, loop variables used after the loop...).
+select = ["E", "W", "F", "I", "B"]
+
+[lint.per-file-ignores]
+# The demo songs are a table, one song per line; splitting the longest
+# line would make it harder to read, not easier.
+"app/seed.py" = ["E501"]

@@ -1,0 +1,422 @@
+openapi: 3.1.0
+info:
+  title: Catalogue service
+  version: 1.0.0
+  description: |
+    Songs and outfits of the Michael Jackson tribute act. Used by the static
+    UI (ui/) from the browser and by the shows service over HTTP.
+
+    Written by hand from app/catalogue/api.py, app/health.py and app/cors.py;
+    tests/test_openapi.py checks that every route of the app is listed here.
+
+    Every error is a JSON object {"errors": ["message", ...]}, also for an
+    unknown path (404), a wrong method (405) and an unexpected error (500,
+    with a generic message). Request bodies are JSON objects; numbers may
+    also be sent as text ("1982"), since every value is validated as text.
+
+    CORS: only the origins in CORS_ORIGINS get Access-Control-Allow-Origin.
+    A POST, PUT or DELETE sent from a browser page on any other origin is
+    refused with 403 before it runs. Requests with no Origin header (curl,
+    the shows service) are not affected. Flask answers OPTIONS (preflight)
+    on every path.
+servers:
+  - url: http://localhost:8001
+    description: docker compose
+
+paths:
+  /health:
+    get:
+      summary: Can the service read and write its own database?
+      description: Checks only this service's database, never another service.
+      operationId: health
+      responses:
+        "200":
+          description: The database can be read and written.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Health" }
+              example: { status: ok, db: ok, version: 3f2c1e9 }
+        "503":
+          description: The database cannot be reached, read or written.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Health" }
+              example: { status: error, db: error, version: 3f2c1e9 }
+
+  /api/songs:
+    get:
+      summary: The songs with these ids (used by the shows service)
+      description: |
+        Ids that do not exist are left out of the list. No ids (or an empty
+        ids) gives an empty list. The order of the list is not defined.
+      operationId: songsByIds
+      parameters:
+        - name: ids
+          in: query
+          required: false
+          description: Song ids separated by commas.
+          schema: { type: string, pattern: "^\\d+(,\\d+)*$" }
+          example: "3,7,12"
+      responses:
+        "200":
+          description: The songs found, with their outfit's name and change time.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/SongForShows" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+    post:
+      summary: Add a song
+      operationId: createSong
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SongInput" }
+      responses:
+        "201":
+          description: The saved song.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SongDetails" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /api/songs/active:
+    get:
+      summary: The songs that can be added to a setlist (used by the shows service)
+      description: Every song with active 1, sorted by title.
+      operationId: activeSongs
+      responses:
+        "200":
+          description: The active songs.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ActiveSong" }
+
+  /api/songs/all:
+    get:
+      summary: Every song, active ones first, then by title
+      operationId: allSongs
+      responses:
+        "200":
+          description: All songs, retired ones included.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Song" }
+
+  /api/songs/{song_id}:
+    parameters:
+      - $ref: "#/components/parameters/SongId"
+    get:
+      summary: One song, to fill the edit form
+      operationId: getSong
+      responses:
+        "200":
+          description: The song.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SongDetails" }
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      summary: Replace every field of a song
+      operationId: updateSong
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SongInput" }
+      responses:
+        "200":
+          description: The saved song.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SongDetails" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/songs/{song_id}/retire:
+    parameters:
+      - $ref: "#/components/parameters/SongId"
+    post:
+      summary: Retire a song (it can no longer be added to a setlist)
+      operationId: retireSong
+      responses:
+        "200":
+          description: The song, now with active 0.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SongDetails" }
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/songs/{song_id}/reactivate:
+    parameters:
+      - $ref: "#/components/parameters/SongId"
+    post:
+      summary: Make a retired song active again
+      operationId: reactivateSong
+      responses:
+        "200":
+          description: The song, now with active 1.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SongDetails" }
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/outfits:
+    get:
+      summary: Every outfit, by name, with how many songs use it
+      operationId: listOutfits
+      responses:
+        "200":
+          description: All outfits.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Outfit" }
+    post:
+      summary: Add an outfit
+      operationId: createOutfit
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OutfitInput" }
+      responses:
+        "201":
+          description: The saved outfit (song_count 0).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Outfit" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /api/outfits/{outfit_id}:
+    parameters:
+      - $ref: "#/components/parameters/OutfitId"
+    put:
+      summary: Rename an outfit or change its change time
+      operationId: updateOutfit
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OutfitInput" }
+      responses:
+        "200":
+          description: The saved outfit.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Outfit" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      summary: Remove an outfit that no song uses
+      operationId: deleteOutfit
+      responses:
+        "204":
+          description: Removed. No body.
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Songs (active or retired) still use the outfit; nothing is removed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Errors" }
+              example:
+                errors:
+                  - "This outfit is used by 3 songs (retired ones count too). Move them to another outfit first."
+
+components:
+  parameters:
+    SongId:
+      name: song_id
+      in: path
+      required: true
+      description: Digits only; anything else is a 404.
+      schema: { type: integer, minimum: 1 }
+    OutfitId:
+      name: outfit_id
+      in: path
+      required: true
+      description: Digits only; anything else is a 404.
+      schema: { type: integer, minimum: 1 }
+
+  responses:
+    BadRequest:
+      description: |
+        The body is not a JSON object, or its values do not validate. Every
+        field error is listed at once. Nothing is saved.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Errors" }
+          example: { errors: ["Title is required.", "Energy must be between 1 and 5."] }
+    Forbidden:
+      description: Sent from a browser page whose origin is not in CORS_ORIGINS. Nothing changes.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Errors" }
+          example: { errors: ["Origin http://evil.example may not change data here."] }
+    NotFound:
+      description: No song or outfit with this id.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Errors" }
+          example: { errors: ["Song 99 does not exist."] }
+
+  schemas:
+    Errors:
+      type: object
+      required: [errors]
+      properties:
+        errors:
+          type: array
+          minItems: 1
+          items: { type: string }
+
+    Health:
+      type: object
+      required: [status, db, version]
+      properties:
+        status: { type: string, enum: [ok, error] }
+        db: { type: string, enum: [ok, error] }
+        version:
+          type: string
+          description: Commit SHA the image was built from (GIT_SHA), or "dev".
+
+    # The two seam schemas below are copied into services/shows/openapi.yaml
+    # as CatalogueSong and CatalogueActiveSong; shows' tests/test_openapi.py
+    # checks that the copies stay identical.
+    SongForShows:
+      type: object
+      description: A song as GET /api/songs returns it to the shows service.
+      required:
+        - id
+        - title
+        - album
+        - year
+        - duration_seconds
+        - energy
+        - kind
+        - outfit_id
+        - active
+        - outfit_name
+        - outfit_change_seconds
+      properties:
+        id: { type: integer }
+        title: { type: string }
+        album: { type: string }
+        year: { type: integer }
+        duration_seconds: { type: integer, minimum: 1 }
+        energy: { type: integer, minimum: 1, maximum: 5 }
+        kind: { type: string, enum: [dance, ballad] }
+        outfit_id: { type: integer }
+        active: { type: integer, enum: [0, 1], description: "1 = active, 0 = retired." }
+        outfit_name: { type: string }
+        outfit_change_seconds: { type: integer, minimum: 0 }
+
+    ActiveSong:
+      type: object
+      description: A song as GET /api/songs/active returns it to the shows service.
+      required:
+        - id
+        - title
+        - album
+        - year
+        - duration_seconds
+        - energy
+        - kind
+        - outfit_id
+        - active
+        - outfit_name
+      properties:
+        id: { type: integer }
+        title: { type: string }
+        album: { type: string }
+        year: { type: integer }
+        duration_seconds: { type: integer, minimum: 1 }
+        energy: { type: integer, minimum: 1, maximum: 5 }
+        kind: { type: string, enum: [dance, ballad] }
+        outfit_id: { type: integer }
+        active: { type: integer, enum: [0, 1], description: "1 = active, 0 = retired." }
+        outfit_name: { type: string }
+
+    Song:
+      description: A song in the list of all songs, with its duration as text.
+      allOf:
+        - $ref: "#/components/schemas/ActiveSong"
+        - $ref: "#/components/schemas/DurationText"
+
+    SongDetails:
+      description: One song with its outfit details and its duration as text.
+      allOf:
+        - $ref: "#/components/schemas/SongForShows"
+        - $ref: "#/components/schemas/DurationText"
+
+    DurationText:
+      type: object
+      required: [duration]
+      properties:
+        duration:
+          type: string
+          description: duration_seconds as minutes:seconds, the text the form sends back.
+          example: "4:54"
+
+    SongInput:
+      type: object
+      required: [title, album, year, duration, energy, kind, outfit_id]
+      properties:
+        title: { type: string, maxLength: 200 }
+        album: { type: string, maxLength: 200 }
+        year: { type: [integer, string], example: 1982 }
+        duration: { type: string, description: "Minutes:seconds.", example: "4:54" }
+        energy: { type: [integer, string], description: "1 to 5.", example: 4 }
+        kind: { type: string, enum: [dance, ballad] }
+        outfit_id: { type: [integer, string], description: An existing outfit. }
+
+    Outfit:
+      type: object
+      required: [id, name, change_seconds, song_count]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        change_seconds: { type: integer, minimum: 0 }
+        song_count:
+          type: integer
+          minimum: 0
+          description: Songs (active or retired) that use it; above 0 it cannot be removed.
+
+    OutfitInput:
+      type: object
+      required: [name, change_seconds]
+      properties:
+        name: { type: string, maxLength: 100 }
+        change_seconds: { type: [integer, string], description: Seconds to change into it., example: 90 }
