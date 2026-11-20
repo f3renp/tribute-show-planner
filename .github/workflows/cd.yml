@@ -62,34 +62,52 @@ jobs:
       # DATABASE_URL holds a password, so it is a Container Apps secret
       # (database-url) and the variable only points to it (secretref).
       # GitHub hides the secret's value wherever it appears in the log, and
-      # -o none keeps az from printing the app's settings. The revision
-      # suffix is new on every run, so each deploy (a re-run too) starts a
-      # new revision that reads the current secret and image.
+      # -o none keeps az from printing the app's settings.
+      #
+      # A revision reads its secrets when it starts. A new commit means a new
+      # image tag, so update starts a new revision that reads the current
+      # secret. A re-run of the same commit (e.g. after making the GHCR
+      # packages public) changes nothing in the app, so update starts no new
+      # revision: then the latest one is restarted, which pulls the image and
+      # reads the secret again. (Our environment is an "express" one, which
+      # does not accept --revision-suffix to force a new revision instead.)
       - name: Deploy the catalogue
         env:
           DB_PASSWORD: ${{ secrets.CATALOGUE_DB_PASSWORD }}
         run: |
-          az containerapp secret set --name "$PREFIX-catalogue" --resource-group "$RESOURCE_GROUP" \
+          app="$PREFIX-catalogue"
+          before=$(az containerapp show --name "$app" --resource-group "$RESOURCE_GROUP" --query properties.latestRevisionName -o tsv)
+          az containerapp secret set --name "$app" --resource-group "$RESOURCE_GROUP" \
             --secrets "database-url=mssql://catalogue_app:$DB_PASSWORD@$PREFIX-sql.database.windows.net:1433/$PREFIX-catalogue-db" \
             -o none
-          az containerapp update --name "$PREFIX-catalogue" --resource-group "$RESOURCE_GROUP" \
+          az containerapp update --name "$app" --resource-group "$RESOURCE_GROUP" \
             --image "ghcr.io/$OWNER/tribute-catalogue:$GITHUB_SHA" \
-            --revision-suffix "r$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" \
             --set-env-vars "DATABASE_URL=secretref:database-url" "CORS_ORIGINS=$UI_ORIGIN" \
             -o none
+          after=$(az containerapp show --name "$app" --resource-group "$RESOURCE_GROUP" --query properties.latestRevisionName -o tsv)
+          if [ "$before" = "$after" ]; then
+            echo "No new revision (same commit): restarting $after"
+            az containerapp revision restart --name "$app" --resource-group "$RESOURCE_GROUP" --revision "$after" -o none
+          fi
 
       - name: Deploy shows
         env:
           DB_PASSWORD: ${{ secrets.SHOWS_DB_PASSWORD }}
         run: |
-          az containerapp secret set --name "$PREFIX-shows" --resource-group "$RESOURCE_GROUP" \
+          app="$PREFIX-shows"
+          before=$(az containerapp show --name "$app" --resource-group "$RESOURCE_GROUP" --query properties.latestRevisionName -o tsv)
+          az containerapp secret set --name "$app" --resource-group "$RESOURCE_GROUP" \
             --secrets "database-url=mssql://shows_app:$DB_PASSWORD@$PREFIX-sql.database.windows.net:1433/$PREFIX-shows-db" \
             -o none
-          az containerapp update --name "$PREFIX-shows" --resource-group "$RESOURCE_GROUP" \
+          az containerapp update --name "$app" --resource-group "$RESOURCE_GROUP" \
             --image "ghcr.io/$OWNER/tribute-shows:$GITHUB_SHA" \
-            --revision-suffix "r$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" \
             --set-env-vars "DATABASE_URL=secretref:database-url" "CORS_ORIGINS=$UI_ORIGIN" "CATALOGUE_URL=$CATALOGUE_URL" \
             -o none
+          after=$(az containerapp show --name "$app" --resource-group "$RESOURCE_GROUP" --query properties.latestRevisionName -o tsv)
+          if [ "$before" = "$after" ]; then
+            echo "No new revision (same commit): restarting $after"
+            az containerapp revision restart --name "$app" --resource-group "$RESOURCE_GROUP" --revision "$after" -o none
+          fi
 
       # config.js is the UI's only setting: replaced here, in the runner,
       # with the Container Apps' addresses (the committed one is for
