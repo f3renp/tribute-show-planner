@@ -6,9 +6,8 @@
 # lists exactly the variables its app/config.py reads, with the same defaults.
 student: fmedina.ieu2024
 prefix: fmedina-ieu2024
-# Placeholder until the Storage static website exists (Friday 20 Nov):
-# .invalid is a reserved domain that never resolves.
-public_url: https://set-on-friday.invalid
+# The UI's Storage static website endpoint (README, Azure setup, step 3).
+public_url: https://fmedinaieu2024ui.z1.web.core.windows.net
 ui:
   path: ui
   # The professor's guide uses an Azure Storage static website instead of a
