@@ -384,7 +384,11 @@ Changes reach `main` only through pull requests. Two workflows in
      the GitHub secret (`CATALOGUE_DB_PASSWORD`, `SHOWS_DB_PASSWORD`) and
      points the app at the image with this commit's SHA, with
      `DATABASE_URL=secretref:database-url`, `CORS_ORIGINS` (the UI
-     origin) and, for shows, `CATALOGUE_URL`;
+     origin) and, for shows, `CATALOGUE_URL`. A new commit's image tag
+     starts a new revision, which reads the current secret; on a re-run of
+     the same commit no new revision starts, so the latest one is restarted
+     instead (our "express" Container Apps environment does not accept
+     `--revision-suffix`);
   4. writes `ui/config.js` with the two Container Apps' HTTPS addresses and
      uploads `ui/` to the storage account's `$web` container;
   5. asks each service's `/health` every 15 s, for up to 5 minutes, until
