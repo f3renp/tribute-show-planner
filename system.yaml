@@ -1,7 +1,7 @@
 # yaml-language-server: $schema=./system.schema.json
 # The whole system in one file: both services, their settings, the call
-# across the seam and the Azure resources. Format: system.schema.json (our
-# own, written from the example in the brief, §8a). CI validates this file
+# across the seam and the Azure resources. Format: system.schema.json, the
+# professor's schema, copied unchanged. CI validates this file
 # against it, and each service's tests/test_system_yaml.py checks that "env"
 # lists exactly the variables its app/config.py reads, with the same defaults.
 student: fmedina.ieu2024
@@ -12,8 +12,8 @@ public_url: https://set-on-friday.invalid
 ui:
   path: ui
   # The professor's guide uses an Azure Storage static website instead of a
-  # Static Web App. Account names allow only lowercase letters and digits.
-  # Name to confirm on Friday against the guide.
+  # Static Web App, named after the prefix without hyphens followed by "ui"
+  # (account names allow only lowercase letters and digits).
   storage_account: fmedinaieu2024ui
   calls: [catalogue, shows]
 azure:
@@ -21,8 +21,6 @@ azure:
   container_apps_environment: fmedina-ieu2024-env
   sql_server: fmedina-ieu2024-sql
   registry: ghcr.io/f3renp
-  # User-assigned managed identity the pipeline signs in with (OIDC).
-  managed_identity: fmedina-ieu2024-github
 services:
   catalogue:
     description: Songs and the outfits they are performed in; retire and reactivate songs.

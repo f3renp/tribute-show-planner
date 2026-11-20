@@ -68,8 +68,8 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install check-jsonschema==0.39.0 openapi-spec-validator==0.9.0
-      # Our own schema (none was provided): a missing, misspelt or extra
-      # field in system.yaml fails the job.
+      # The professor's schema: a missing, misspelt or extra field in
+      # system.yaml fails the job.
       - name: Validate system.yaml against system.schema.json
         run: check-jsonschema --schemafile system.schema.json system.yaml
       - name: Validate each openapi.yaml against the OpenAPI specification

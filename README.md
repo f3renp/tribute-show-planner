@@ -132,13 +132,9 @@ The UI's only settings are the two service URLs in `ui/config.js`
 - `system.yaml`: both services, every environment variable they read with
   its default (secrets marked `secret: true`, with no default), the call
   across the seam, and the Azure resources.
-- `system.schema.json`: the format of `system.yaml`. **No schema was
-  provided with the brief, so this one is our own**, written from the
-  example in the brief (§8a), with the UI on an Azure Storage static
-  website (`ui.storage_account`) as in the professor's Azure guide, and the
-  pipeline's managed identity (`azure.managed_identity`). Every object is
-  closed and every field required, so a missing, misspelt or extra field
-  is an error.
+- `system.schema.json`: the format of `system.yaml`, the professor's
+  schema copied unchanged. Its objects are closed, so a misspelt or extra
+  field is an error, and so is a missing required one.
 
 CI checks them in its `validate` job (with the versions pinned there). To
 run the same checks locally, from the repository root:
