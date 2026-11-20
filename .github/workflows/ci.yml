@@ -3,10 +3,16 @@ name: CI
 # Every push and every pull request lints and tests both services (with a
 # 70% coverage gate), validates system.yaml and the OpenAPI documents, runs
 # the cross-seam integration test on the compose stack, and builds both
-# images. Only a push to main publishes the images to GHCR.
+# images. Only a run on main publishes the images to GHCR.
+#
+# On main this workflow does not run by itself: cd.yml calls it
+# (workflow_call), then deploys only if every job here passed. So a push
+# to main runs CI once, not twice.
 on:
   push:
+    branches-ignore: [main]
   pull_request:
+  workflow_call:
 
 jobs:
   test:
@@ -146,3 +152,6 @@ jobs:
           tags: ghcr.io/${{ env.OWNER }}/tribute-${{ matrix.service }}:${{ github.sha }}
           # /health reports this as "version": the same SHA as the image tag.
           build-args: GIT_SHA=${{ github.sha }}
+          # Without this, buildx also pushes a provenance attestation, and
+          # the tag points to an index Azure Container Apps cannot pull.
+          provenance: false

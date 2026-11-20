@@ -6,6 +6,10 @@ is wrong with that order: running time over the limit, outfit changes
 without a long enough break, poor energy pacing, and retired or repeated
 songs.
 
+**Live:** https://fmedinaieu2024ui.z1.web.core.windows.net (Azure; the
+first page after a quiet hour can take a minute while the services and
+their databases wake up).
+
 It runs as a static UI (`ui/`: HTML, CSS and plain JavaScript, no build
 step) that calls two services from the browser. Each service is a Flask
 app served by waitress with its own SQL Server database (ADR-6, ADR-7 in
@@ -213,6 +217,187 @@ Since the pages became JSON APIs (18 Nov), each service's `tests/test_api.py`
 tests every endpoint and status code through Flask's test client, so
 `api.py` is covered too, not only the rules and services (ADR-4).
 
+## Azure setup (one time)
+
+Done once, by hand, on 20 Nov 2026, following the professor's Azure guide
+for Assignment 2. From then on only the pipeline changes anything. These are
+the exact commands, in order, run in Windows PowerShell with the Azure CLI
+(2.92), Docker and the GitHub CLI. No password appears here: each one is
+generated inside the command that uses it.
+
+Everything is in my own Azure for Students subscription, in one resource
+group, in **swedencentral** (one of the five regions this subscription's
+policy "Allowed resource deployment regions" allows, listed with
+`az policy assignment list`).
+
+| Resource | Name |
+|----------|------|
+| Resource group | `rg-fmedina-ieu2024` |
+| Storage account (static website: the UI) | `fmedinaieu2024ui` |
+| SQL server | `fmedina-ieu2024-sql` |
+| SQL databases (serverless, free offer) | `fmedina-ieu2024-catalogue-db`, `fmedina-ieu2024-shows-db` |
+| Container Apps environment | `fmedina-ieu2024-env` (with its Log Analytics workspace, named by Azure) |
+| Container Apps | `fmedina-ieu2024-catalogue`, `fmedina-ieu2024-shows` |
+| Managed identity (the pipeline signs in as it) | `fmedina-ieu2024-github` |
+
+**1. Subscription.**
+
+```
+az account set --subscription 8760a18e-dad4-457b-8c81-473b82b3be23
+az extension add --name containerapp --upgrade
+```
+
+**2. Providers and resource group.**
+
+```
+az provider register --namespace Microsoft.App --wait
+az provider register --namespace Microsoft.OperationalInsights --wait
+az provider register --namespace Microsoft.Sql --wait
+az provider register --namespace Microsoft.Storage --wait
+az provider register --namespace Microsoft.ManagedIdentity --wait
+az group create --name rg-fmedina-ieu2024 --location swedencentral
+```
+
+**3. The UI: a Storage static website.** Its web endpoint,
+`https://fmedinaieu2024ui.z1.web.core.windows.net`, is the system's public
+address and the only origin the services accept (`CORS_ORIGINS`).
+
+```
+az storage account create --name fmedinaieu2024ui --resource-group rg-fmedina-ieu2024 --location swedencentral --kind StorageV2 --sku Standard_LRS
+az storage blob service-properties update --account-name fmedinaieu2024ui --static-website --index-document index.html
+az storage account show --name fmedinaieu2024ui --resource-group rg-fmedina-ieu2024 --query primaryEndpoints.web -o tsv
+```
+
+**4. SQL server and two serverless databases on the free offer.** The
+admin password is random and thrown away right after: whenever admin access
+is needed again, step 7 resets it (the script does). The connection policy
+is Proxy, so every connection uses port 1433 (pymssql's FreeTDS and
+Azure's default Redirect policy, which moves connections from inside Azure
+to ports 11000-11999, are not a combination I wanted to depend on). The
+free offer fixes auto-pause at 60 minutes and the size at 32 GB, so
+`--auto-pause-delay` and `--max-size` are not passed. When a database uses
+up its free monthly allowance, `AutoPause` pauses it until the next month
+instead of billing it.
+
+```
+$adminPassword = <32 random letters and digits, generated in PowerShell>
+az sql server create --name fmedina-ieu2024-sql --resource-group rg-fmedina-ieu2024 --location swedencentral --admin-user fmedinaadmin --admin-password $adminPassword
+az sql server firewall-rule create --resource-group rg-fmedina-ieu2024 --server fmedina-ieu2024-sql --name AllowAzureServices --start-ip-address 0.0.0.0 --end-ip-address 0.0.0.0
+az sql server conn-policy update --resource-group rg-fmedina-ieu2024 --server fmedina-ieu2024-sql --connection-type Proxy
+az sql db create --resource-group rg-fmedina-ieu2024 --server fmedina-ieu2024-sql --name fmedina-ieu2024-catalogue-db --edition GeneralPurpose --compute-model Serverless --family Gen5 --min-capacity 0.5 --capacity 1 --backup-storage-redundancy Local --use-free-limit true --free-limit-exhaustion-behavior AutoPause
+az sql db create --resource-group rg-fmedina-ieu2024 --server fmedina-ieu2024-sql --name fmedina-ieu2024-shows-db --edition GeneralPurpose --compute-model Serverless --family Gen5 --min-capacity 0.5 --capacity 1 --backup-storage-redundancy Local --use-free-limit true --free-limit-exhaustion-behavior AutoPause
+```
+
+**5. Container Apps.** Both start with the placeholder image; the first
+deploy replaces it. External ingress on port 8000 (the port the images
+listen on), 0 to 1 replicas, the smallest size. The plain settings are set
+here; `DATABASE_URL` is a Container Apps secret that the CD workflow sets
+on every deploy from the GitHub secrets. CORS is in the services' code
+(`app/cors.py`), never on the ingress.
+
+```
+az containerapp env create --name fmedina-ieu2024-env --resource-group rg-fmedina-ieu2024 --location swedencentral
+az containerapp create --name fmedina-ieu2024-catalogue --resource-group rg-fmedina-ieu2024 --environment fmedina-ieu2024-env --image mcr.microsoft.com/k8se/quickstart:latest --ingress external --target-port 8000 --min-replicas 0 --max-replicas 1 --cpu 0.25 --memory 0.5Gi --env-vars "CORS_ORIGINS=https://fmedinaieu2024ui.z1.web.core.windows.net"
+az containerapp show --name fmedina-ieu2024-catalogue --resource-group rg-fmedina-ieu2024 --query properties.configuration.ingress.fqdn -o tsv
+az containerapp create --name fmedina-ieu2024-shows --resource-group rg-fmedina-ieu2024 --environment fmedina-ieu2024-env --image mcr.microsoft.com/k8se/quickstart:latest --ingress external --target-port 8000 --min-replicas 0 --max-replicas 1 --cpu 0.25 --memory 0.5Gi --env-vars "CORS_ORIGINS=https://fmedinaieu2024ui.z1.web.core.windows.net" "CATALOGUE_URL=https://fmedina-ieu2024-catalogue.jollymeadow-b6aa2757.swedencentral.azurecontainerapps.io"
+```
+
+**6. The pipeline's identity.** A user-assigned managed identity with
+Contributor on the resource group only, and two federated credentials that
+let a GitHub Actions run on `main` of this repository sign in as it (OIDC:
+no client secret exists). GitHub may send the subject with names or with
+numeric IDs, so both are registered; the IDs come from
+`https://api.github.com/repos/f3renp/tribute-show-planner` (`owner.id`, `id`).
+
+```
+az identity create --name fmedina-ieu2024-github --resource-group rg-fmedina-ieu2024 --location swedencentral
+az role assignment create --assignee-object-id <principalId from identity create> --assignee-principal-type ServicePrincipal --role Contributor --scope /subscriptions/8760a18e-dad4-457b-8c81-473b82b3be23/resourceGroups/rg-fmedina-ieu2024
+az identity federated-credential create --name github-main --identity-name fmedina-ieu2024-github --resource-group rg-fmedina-ieu2024 --issuer https://token.actions.githubusercontent.com --audiences api://AzureADTokenExchange --subject "repo:f3renp/tribute-show-planner:ref:refs/heads/main"
+az identity federated-credential create --name github-main-ids --identity-name fmedina-ieu2024-github --resource-group rg-fmedina-ieu2024 --issuer https://token.actions.githubusercontent.com --audiences api://AzureADTokenExchange --subject "repo:f3renp@207438248/tribute-show-planner@1406038961:ref:refs/heads/main"
+```
+
+**7. One database user per service, and the GitHub secrets and
+variables.** `db/create_azure_users.ps1` does the database part, so no
+password is ever shown:
+
+```
+.\db\create_azure_users.ps1
+```
+
+For each service it waits until the database answers (a new firewall rule
+can take minutes, and a paused database about a minute to resume), runs
+`db/azure_user.sql` as admin to create a contained user (`catalogue_app`
+or `shows_app`: it exists only inside its own database, with roles
+`db_datareader`, `db_datawriter` and `db_ddladmin` for the migrations),
+checks that the user can sign in, and only then stores its password with
+`gh secret set CATALOGUE_DB_PASSWORD` / `SHOWS_DB_PASSWORD`. At the end it
+checks that `catalogue_app` is refused by the shows database. It opens the
+firewall to this machine's IP only while it runs. On a network with several
+public IPs (Azure saw `.33` and `.35` on the same campus network) the rule
+cannot match; I ran it from a phone hotspot.
+
+The rest of the GitHub settings (the IDs are not credentials: without the
+federated credential they let nobody sign in):
+
+```
+gh secret set AZURE_CLIENT_ID --body <clientId from identity create>
+gh secret set AZURE_TENANT_ID --body <tenantId from az account show>
+gh secret set AZURE_SUBSCRIPTION_ID --body 8760a18e-dad4-457b-8c81-473b82b3be23
+gh variable set PREFIX --body fmedina-ieu2024
+gh variable set RESOURCE_GROUP --body rg-fmedina-ieu2024
+gh variable set UI_STORAGE --body fmedinaieu2024ui
+```
+
+**8. Read access for the professors.**
+
+```
+az role assignment create --assignee amartini@faculty.ie.edu --role Reader --scope /subscriptions/8760a18e-dad4-457b-8c81-473b82b3be23/resourceGroups/rg-fmedina-ieu2024
+az role assignment create --assignee bserra@faculty.ie.edu --role Reader --scope /subscriptions/8760a18e-dad4-457b-8c81-473b82b3be23/resourceGroups/rg-fmedina-ieu2024
+```
+
+**Cost.** With nothing running, about zero: the server, identity, roles and
+environment are free; each database is inside the free offer and pauses
+instead of billing; the Container Apps scale to zero and use the monthly
+free grant when awake (180,000 vCPU-seconds, 360,000 GiB-seconds, 2 million
+requests); Log Analytics is free up to 5 GB a month; the UI is under 1 MB
+in Standard_LRS storage.
+
+## How deployment works
+
+Changes reach `main` only through pull requests. Two workflows in
+`.github/workflows/`:
+
+- **`ci.yml`** runs on every push to a branch other than `main` and on
+  every pull request: lint and tests with the coverage gate for each
+  service, validation of `system.yaml` and the OpenAPI documents, the
+  cross-seam integration test, and both image builds. Nothing is pushed.
+- **`cd.yml`** runs on every push to `main` (a merged pull request). Its
+  `ci` job calls `ci.yml` again on that commit, which on `main` also pushes
+  `ghcr.io/f3renp/tribute-catalogue:<sha>` and `tribute-shows:<sha>`
+  (built with `GIT_SHA=<sha>` and `provenance: false`). Only if every CI
+  job passed, its `deploy` job:
+  1. signs in to Azure as the managed identity with `azure/login` (OIDC:
+     GitHub gives the job a token, Azure trusts it through the federated
+     credential, no password exists);
+  2. reads the UI origin and both Container Apps' addresses from Azure;
+  3. for each service, sets the Container Apps secret `database-url` from
+     the GitHub secret (`CATALOGUE_DB_PASSWORD`, `SHOWS_DB_PASSWORD`) and
+     points the app at the image with this commit's SHA, with
+     `DATABASE_URL=secretref:database-url`, `CORS_ORIGINS` (the UI
+     origin) and, for shows, `CATALOGUE_URL`;
+  4. writes `ui/config.js` with the two Container Apps' HTTPS addresses and
+     uploads `ui/` to the storage account's `$web` container;
+  5. asks each service's `/health` every 15 s, for up to 5 minutes, until
+     it returns 200 with `version` equal to this commit's SHA, and checks
+     that a preflight from the UI's origin is allowed. Otherwise the run
+     fails.
+
+Each service applies its pending migrations when it starts, with at most
+one replica, so they never run twice at the same time. The first request
+after an idle period starts a container and may find its database paused;
+the services retry the connection for about a minute (`db.py`), and the
+UI tells the user to try again if a service takes longer than 60 s.
+
 ## Code copied between the services
 
 The two services share no code, so each can be built, tested and deployed
@@ -271,6 +456,9 @@ Notes:
 
 - `docker-compose.yml`: starts SQL Server, `db-init`, both services and
   the `ui` web server; one volume (`sqlserver-data`).
+- `db/init.sql`: the local databases and logins (run by `db-init`).
+  `db/azure_user.sql` and `db/create_azure_users.ps1`: the database users
+  on Azure (Azure setup, step 7).
 - `.env.example`: the optional settings for compose.
 - `services/<name>/Dockerfile`, `.dockerignore`, `requirements.txt`: how
   each image is built. Only `app/` is copied into the image.
@@ -303,4 +491,6 @@ Notes:
   script per page, and `shouts.js` (the click shouts).
 - `docs/diagrams.md`: architecture and database diagrams (still show the
   single-app version).
+- `.github/workflows/ci.yml`, `cd.yml`: the pipeline (see How deployment
+  works).
 - `ADR.md`: architecture decisions. `AI_USAGE.md`: AI usage log.

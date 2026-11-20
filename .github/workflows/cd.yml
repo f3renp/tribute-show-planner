@@ -1,0 +1,141 @@
+name: CD
+
+# Every push to main (in practice, a merged pull request): run all of CI on
+# this commit, and only if it passes, deploy its images and the UI to Azure,
+# then check that both services answer with this commit.
+on:
+  push:
+    branches: [main]
+
+# One deploy at a time. With one replica per app and migrations at startup,
+# a second merge waits for the first deploy instead of racing it.
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  ci:
+    # The same jobs as on a pull request. On main the images job also
+    # pushes ghcr.io/f3renp/tribute-NAME:SHA, so it needs packages: write.
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+      packages: write
+
+  deploy:
+    needs: ci
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Lets this job ask GitHub for an OIDC token. azure/login trades it
+      # for an Azure token of the managed identity fmedina-ieu2024-github,
+      # whose federated credential trusts only this repository's main.
+      id-token: write
+    env:
+      PREFIX: ${{ vars.PREFIX }}
+      RESOURCE_GROUP: ${{ vars.RESOURCE_GROUP }}
+      UI_STORAGE: ${{ vars.UI_STORAGE }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Sign in to Azure (OIDC, no password)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      # Read the addresses from Azure instead of writing them here, so they
+      # are always the real ones. The UI origin is the static website
+      # endpoint without its trailing slash: browsers send it that way.
+      - name: Find the addresses
+        run: |
+          web=$(az storage account show --name "$UI_STORAGE" --resource-group "$RESOURCE_GROUP" --query primaryEndpoints.web -o tsv)
+          echo "UI_ORIGIN=${web%/}" >> "$GITHUB_ENV"
+          catalogue=$(az containerapp show --name "$PREFIX-catalogue" --resource-group "$RESOURCE_GROUP" --query properties.configuration.ingress.fqdn -o tsv)
+          echo "CATALOGUE_URL=https://$catalogue" >> "$GITHUB_ENV"
+          shows=$(az containerapp show --name "$PREFIX-shows" --resource-group "$RESOURCE_GROUP" --query properties.configuration.ingress.fqdn -o tsv)
+          echo "SHOWS_URL=https://$shows" >> "$GITHUB_ENV"
+          # Image names must be lowercase.
+          echo "OWNER=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_ENV"
+
+      # DATABASE_URL holds a password, so it is a Container Apps secret
+      # (database-url) and the variable only points to it (secretref).
+      # GitHub hides the secret's value wherever it appears in the log, and
+      # -o none keeps az from printing the app's settings. The revision
+      # suffix is new on every run, so each deploy (a re-run too) starts a
+      # new revision that reads the current secret and image.
+      - name: Deploy the catalogue
+        env:
+          DB_PASSWORD: ${{ secrets.CATALOGUE_DB_PASSWORD }}
+        run: |
+          az containerapp secret set --name "$PREFIX-catalogue" --resource-group "$RESOURCE_GROUP" \
+            --secrets "database-url=mssql://catalogue_app:$DB_PASSWORD@$PREFIX-sql.database.windows.net:1433/$PREFIX-catalogue-db" \
+            -o none
+          az containerapp update --name "$PREFIX-catalogue" --resource-group "$RESOURCE_GROUP" \
+            --image "ghcr.io/$OWNER/tribute-catalogue:$GITHUB_SHA" \
+            --revision-suffix "r$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" \
+            --set-env-vars "DATABASE_URL=secretref:database-url" "CORS_ORIGINS=$UI_ORIGIN" \
+            -o none
+
+      - name: Deploy shows
+        env:
+          DB_PASSWORD: ${{ secrets.SHOWS_DB_PASSWORD }}
+        run: |
+          az containerapp secret set --name "$PREFIX-shows" --resource-group "$RESOURCE_GROUP" \
+            --secrets "database-url=mssql://shows_app:$DB_PASSWORD@$PREFIX-sql.database.windows.net:1433/$PREFIX-shows-db" \
+            -o none
+          az containerapp update --name "$PREFIX-shows" --resource-group "$RESOURCE_GROUP" \
+            --image "ghcr.io/$OWNER/tribute-shows:$GITHUB_SHA" \
+            --revision-suffix "r$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" \
+            --set-env-vars "DATABASE_URL=secretref:database-url" "CORS_ORIGINS=$UI_ORIGIN" "CATALOGUE_URL=$CATALOGUE_URL" \
+            -o none
+
+      # config.js is the UI's only setting: replaced here, in the runner,
+      # with the Container Apps' addresses (the committed one is for
+      # compose). --auth-mode key: az fetches the account key, which
+      # Contributor on the resource group may do, so no extra role is needed.
+      - name: Deploy the UI
+        run: |
+          cat > ui/config.js <<EOF
+          // Written by the CD workflow (cd.yml) for commit $GITHUB_SHA.
+          window.CONFIG = {
+            CATALOGUE_URL: "$CATALOGUE_URL",
+            SHOWS_URL: "$SHOWS_URL",
+          };
+          EOF
+          az storage blob upload-batch --account-name "$UI_STORAGE" --auth-mode key \
+            --destination '$web' --source ui --overwrite -o none
+
+      # The first request after a deploy starts the container, which may
+      # find its database paused (about a minute to resume) and then runs
+      # pending migrations. So: ask every 15 s for up to 5 minutes. It passes
+      # only when /health is 200 AND reports this commit, so an old revision
+      # still answering cannot pass. Then a browser-style preflight from the
+      # UI's origin must be allowed, or every POST from the UI would fail.
+      - name: Check both services
+        run: |
+          for url in "$CATALOGUE_URL" "$SHOWS_URL"; do
+            deadline=$((SECONDS + 300))
+            until body=$(curl --silent --fail --max-time 60 "$url/health") \
+                && echo "$body" | jq -e --arg sha "$GITHUB_SHA" '.version == $sha' > /dev/null; do
+              if [ "$SECONDS" -ge "$deadline" ]; then
+                echo "$url/health did not return 200 with version $GITHUB_SHA within 5 minutes"
+                exit 1
+              fi
+              echo "$url/health not ready yet, asking again in 15 s"
+              sleep 15
+            done
+            echo "$url/health: $body"
+
+            allowed=$(curl --silent --output /dev/null --dump-header - --max-time 60 -X OPTIONS \
+              -H "Origin: $UI_ORIGIN" \
+              -H "Access-Control-Request-Method: POST" \
+              -H "Access-Control-Request-Headers: content-type" \
+              "$url/health" | tr -d '\r' | grep -i '^access-control-allow-origin:' | cut -d' ' -f2)
+            if [ "$allowed" != "$UI_ORIGIN" ]; then
+              echo "$url does not allow the UI's origin $UI_ORIGIN (got '$allowed')"
+              exit 1
+            fi
+            echo "$url allows $UI_ORIGIN"
+          done
