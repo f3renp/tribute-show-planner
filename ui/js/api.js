@@ -126,6 +126,12 @@ function el(tag, text, className) {
   return element;
 }
 
+// A show's status ("planned", "confirmed" or "cancelled") as a small badge.
+// Used by the shows list and the show page.
+function statusBadge(status) {
+  return el("span", status, "status status-" + status);
+}
+
 // A <button type="button"> that calls onClick.
 function button(text, onClick) {
   const element = el("button", text);

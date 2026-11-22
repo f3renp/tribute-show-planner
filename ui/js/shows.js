@@ -20,7 +20,8 @@ function renderShows(shows) {
 }
 
 function showRow(show) {
-  const row = el("tr");
+  // A cancelled show is greyed out, like a retired song.
+  const row = el("tr", null, show.status === "cancelled" ? "cancelled" : "");
   const nameCell = el("td");
   const link = el("a", show.name);
   link.href = "show.html?id=" + show.id;
@@ -29,6 +30,9 @@ function showRow(show) {
   [show.venue, show.show_date, show.max_minutes].forEach((text) => {
     row.appendChild(el("td", text));
   });
+  const statusCell = el("td");
+  statusCell.appendChild(statusBadge(show.status));
+  row.appendChild(statusCell);
   return row;
 }
 

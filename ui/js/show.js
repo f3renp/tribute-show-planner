@@ -34,9 +34,11 @@ function renderOverview(overview) {
 function renderShow(show) {
   document.title = show.name + " - Tribute Show Planner";
   document.getElementById("show-name").textContent = show.name;
-  document.getElementById("show-facts").textContent =
-    show.venue + ", " + show.show_date + ". Limit: " + show.max_minutes + " minutes.";
-  ["name", "venue", "show_date", "max_minutes"].forEach((field) => {
+  document.getElementById("show-facts").replaceChildren(
+    show.venue + ", " + show.show_date + ". Limit: " + show.max_minutes + " minutes. ",
+    statusBadge(show.status)
+  );
+  ["name", "venue", "show_date", "max_minutes", "status"].forEach((field) => {
     editForm.elements[field].value = show[field];
   });
 }

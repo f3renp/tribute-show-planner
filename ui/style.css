@@ -180,6 +180,34 @@ tr.retired td:first-child {
   text-decoration: line-through;
 }
 
+/* A show's status (migration 002): planned is gold, confirmed green,
+   cancelled red, and a cancelled show's row is greyed out. */
+.status {
+  display: inline-block;
+  padding: 0 0.5rem;
+  border-radius: 0.75rem;
+  font-size: 0.85em;
+}
+
+.status-planned {
+  color: var(--text);
+  background: var(--gold-light);
+}
+
+.status-confirmed {
+  color: var(--ok-text);
+  background: var(--ok-back);
+}
+
+.status-cancelled {
+  color: var(--bad-text);
+  background: var(--bad-back);
+}
+
+tr.cancelled td {
+  color: var(--muted);
+}
+
 tr.break td {
   font-style: italic;
   background: #f7f7f7;

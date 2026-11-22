@@ -8,6 +8,7 @@ import config
 import db
 import health
 import main
+import migrate
 from shows import catalogue_client
 
 
@@ -54,8 +55,12 @@ def test_the_test_write_leaves_nothing_behind(client):
     # primary key of schema_migrations.
     assert client.get("/health").status_code == 200
     assert client.get("/health").status_code == 200
-    rows = db.fetch_all("SELECT version FROM schema_migrations")
-    assert [row["version"] for row in rows] == ["001_init"]
+    rows = db.fetch_all("SELECT version FROM schema_migrations ORDER BY version")
+    # Only the real migrations are recorded, nothing written by /health.
+    expected = [
+        migrate.version_of(name) for name in migrate.migration_files(config.MIGRATIONS_DIR)
+    ]
+    assert [row["version"] for row in rows] == expected
 
 
 def test_health_is_503_when_the_database_cannot_be_reached(client, monkeypatch, capsys):

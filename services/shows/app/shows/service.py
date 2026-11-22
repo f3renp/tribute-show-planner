@@ -25,6 +25,14 @@ MAX_BREAK_LABEL_LENGTH = 100
 
 DIRECTIONS = ("up", "down")
 
+# The values ck_shows_status allows (migrations/002_add_show_status.sql).
+# A show is planned until the manager confirms the booking; a cancelled
+# show is kept, with its setlist, instead of being deleted.
+STATUSES = ("planned", "confirmed", "cancelled")
+
+# A form without a status gets the same value as the column's default.
+DEFAULT_STATUS = "planned"
+
 # A song cannot be checked (exists? retired?) without the catalogue, so it
 # is not added rather than added unchecked.
 CATALOGUE_DOWN_ADD_SONG = (
@@ -72,11 +80,17 @@ def validate_show(form):
     if max_minutes is None or not 1 <= max_minutes <= MAX_SHOW_MINUTES:
         errors.append(f"Length must be between 1 and {MAX_SHOW_MINUTES} minutes.")
 
+    # Optional: a missing or empty status means planned.
+    status = form.get("status", "").strip() or DEFAULT_STATUS
+    if status not in STATUSES:
+        errors.append("Status must be planned, confirmed or cancelled.")
+
     show = {
         "name": name,
         "venue": venue,
         "show_date": show_date,
         "max_minutes": max_minutes,
+        "status": status,
     }
     return show, errors
 
