@@ -1,95 +1,171 @@
 # Diagrams
 
-Both diagrams are written in Mermaid, so GitHub draws them when this file
-is opened. They describe the code as it is in the repository.
+Written in Mermaid, so GitHub draws them when this file is opened. Each
+one is kept small so it stays readable at full page width in the report.
+They describe the system as deployed on 22 Nov 2026 (commit e6c8bc2 and
+later), except the first one, which is Assignment 1.
 
-## Architecture
+## 1. Architecture before: the Assignment 1 monolith
 
-One process: `python app.py` starts waitress, which serves the Flask app
-built by `create_app()`. Arrows point from the file that calls to the file
-it calls. The thick arrow is the seam, the only place where the show
-builder uses the catalogue.
+One Flask app in one container, with server-rendered pages and one SQLite
+file. The thick arrow is the seam: the only place where the show builder
+used the catalogue, through two Python functions.
 
 ```mermaid
 flowchart TD
-    browser["Browser"] -->|"HTTP on PORT (0.0.0.0)"| waitress["waitress server"]
-    waitress --> app["app.py<br/>create_app()"]
-    app -->|"1. init_db()"| db
-    app -->|"2. seed_demo_catalogue()"| seed["seed.py<br/>demo outfits and songs"]
-    app -->|"registers blueprint"| croutes
-    app -->|"registers blueprint"| sroutes
+    browser["Browser"] -->|"HTML pages"| app["Flask app (waitress)<br/>app.py"]
 
-    subgraph catalogue["catalogue/ (domain 1: songs and outfits)"]
-        croutes["routes.py<br/>song and outfit pages"] --> cservice["service.py<br/>validation, duration parsing,<br/>retire and reactivate"]
-        croutes -->|"reads lists for pages"| crepo["repository.py<br/>SQL for songs and outfits"]
-        cservice --> crepo
+    subgraph catalogue["catalogue/ package"]
+        croutes["routes.py<br/>song and outfit pages"] --> cservice["service.py<br/>validation, retire"]
+        cservice --> crepo["repository.py"]
     end
 
-    subgraph shows["shows/ (domain 2: shows and setlists)"]
-        sroutes["routes.py<br/>show pages"] --> sservice["service.py<br/>add, remove, reorder items"]
-        sroutes -->|"reads lists for pages"| srepo["repository.py<br/>SQL for shows and setlist_items"]
-        sroutes -->|"check_setlist(), setlist_seconds(),<br/>is_over_limit()"| rules["rules.py<br/>six pure checks"]
-        sservice --> srepo
-        sservice -->|"format_duration()"| rules
+    subgraph shows["shows/ package"]
+        sroutes["routes.py<br/>show pages"] --> sservice["service.py<br/>setlist edits"]
+        sroutes --> rules["rules.py<br/>six checks"]
+        sservice --> srepo["repository.py"]
     end
 
-    sservice ==>|"the seam:<br/>get_songs_by_ids()<br/>list_active_songs()"| cservice
-    seed -->|"writes: add_outfit(), add_song(), retire_song()"| cservice
-    seed -->|"reads: is the catalogue empty, look up IDs"| crepo
-
-    crepo --> db["db.py<br/>connections, init_db()"]
-    srepo --> db
-    db --> sqlite[("SQLite file<br/>DATA_DIR/tribute.db")]
-    db -.->|"DATABASE_PATH"| config["config.py<br/>PORT, DATA_DIR<br/>from environment variables"]
-    app -.->|"PORT"| config
+    app --> croutes
+    app --> sroutes
+    sservice ==>|"seam: get_songs_by_ids()<br/>list_active_songs()"| cservice
+    crepo --> sqlite[("SQLite: tribute.db<br/>all 4 tables")]
+    srepo --> sqlite
 ```
 
-## Database
+## 2. Architecture after: two services, one database each
 
-Four tables in one SQLite file. Solid lines are real foreign keys. The
-dashed line is not a foreign key: `setlist_items.song_id` stores only the
-song's ID, and the show builder gets the song details through the
-catalogue service (ADR-3). A break item has no `song_id`.
+The UI is static files; the browser calls both services' JSON APIs, at
+the URLs in `config.js`, and each service accepts browser calls only from
+the UI's origin (`CORS_ORIGINS`). The thick arrow is the seam, now an HTTP
+call from shows to the catalogue at `CATALOGUE_URL`, with a 5 s timeout.
+No service reads the other's database.
+
+```mermaid
+flowchart TD
+    browser["Browser"] -->|"loads pages + config.js"| ui["Static UI: ui/<br/>Azure: Storage static website<br/>local: nginx"]
+    browser -->|"/api/songs, /api/outfits"| catalogue["catalogue service<br/>Flask, own container"]
+    browser -->|"/api/shows"| shows["shows service<br/>Flask, own container"]
+
+    shows ==>|"CATALOGUE_URL<br/>GET /api/songs?ids=<br/>GET /api/songs/active"| catalogue
+
+    catalogue -->|"login catalogue_app"| catdb[("catalogue database<br/>outfits, songs")]
+    shows -->|"login shows_app"| showsdb[("shows database<br/>shows, setlist_items")]
+```
+
+If the catalogue does not answer within 5 s, shows still serves the
+overview from its own database, without song details and with the checks
+skipped, and refuses to add songs (503).
+
+## 3. Deployment
+
+Every change goes through a pull request. A merge to `main` runs `cd.yml`,
+which calls `ci.yml` again on that commit; on `main` its images job also
+pushes the SHA-tagged images, and only then does `cd.yml` deploy them. The
+pipeline signs in with OIDC as the managed identity: no password exists.
+Everything on Azure is in `rg-fmedina-ieu2024` (swedencentral).
+
+```mermaid
+flowchart TD
+    repo["GitHub: f3renp/tribute-show-planner"] -->|"push, pull request"| ci["ci.yml<br/>lint, tests 70%, validate,<br/>integration, build images"]
+    repo -->|"merge to main"| cd["cd.yml<br/>CI, then deploy"]
+    cd -->|"calls on main"| ci
+    ci -->|"on main only:<br/>push :SHA"| ghcr["GHCR (the apps pull from here)<br/>ghcr.io/f3renp/tribute-catalogue<br/>ghcr.io/f3renp/tribute-shows"]
+    cd -->|"OIDC sign-in"| mi
+
+    subgraph rg["rg-fmedina-ieu2024"]
+        mi["managed identity<br/>fmedina-ieu2024-github"]
+        web["Storage fmedinaieu2024ui<br/>static website $web"]
+        subgraph env["fmedina-ieu2024-env"]
+            capp["fmedina-ieu2024-catalogue"]
+            sapp["fmedina-ieu2024-shows"]
+        end
+        subgraph sql["fmedina-ieu2024-sql"]
+            catdb[("fmedina-ieu2024-catalogue-db")]
+            showsdb[("fmedina-ieu2024-shows-db")]
+        end
+        logs["Log Analytics workspace"]
+    end
+
+    mi -->|"ui/ + config.js"| web
+    mi -->|"new image + secret"| env
+    cd -.->|"GET /health until<br/>version = SHA"| env
+    ghcr --> env
+    capp --> catdb
+    sapp --> showsdb
+    env -->|"console logs"| logs
+```
+
+Each Container App runs 0 to 1 replicas; each database is serverless on
+the free offer and pauses after 60 minutes without connections (ADR-8).
+
+## 4. Databases, one per service
+
+These match the migrations: catalogue `001_init.sql`; shows `001_init.sql`
+and `002_add_show_status.sql`. `schema_migrations` is created by
+`app/migrate.py` and records each applied file.
+
+### Catalogue database
 
 ```mermaid
 erDiagram
     outfits ||--o{ songs : "outfit_id (FK)"
-    shows ||--o{ setlist_items : "show_id (FK, ON DELETE CASCADE)"
-    songs |o..o{ setlist_items : "ID only, no FK"
 
     outfits {
-        INTEGER id PK
-        TEXT name UK
-        INTEGER change_seconds "0 or more"
+        INT id PK
+        NVARCHAR(100) name UK
+        INT change_seconds "0 or more"
     }
 
     songs {
-        INTEGER id PK
-        TEXT title UK "unique together with album"
-        TEXT album UK
-        INTEGER year
-        INTEGER duration_seconds "more than 0"
-        INTEGER energy "1 to 5"
-        TEXT kind "dance or ballad"
-        INTEGER outfit_id FK
-        INTEGER active "1 active, 0 retired"
+        INT id PK
+        NVARCHAR(200) title UK "unique with album"
+        NVARCHAR(200) album UK
+        INT year
+        INT duration_seconds "more than 0"
+        INT energy "1 to 5"
+        NVARCHAR(10) kind "dance or ballad"
+        INT outfit_id FK
+        INT active "1 active, 0 retired"
     }
 
+    schema_migrations {
+        NVARCHAR(100) version PK "001_init"
+        DATETIME2 applied_at
+    }
+```
+
+### Shows database
+
+`setlist_items.song_id` is a plain ID with no foreign key: the songs are in
+the catalogue's database, so shows checks the song over HTTP when it is
+added (ADR-3, ADR-7). A break item has no `song_id`.
+
+```mermaid
+erDiagram
+    shows ||--o{ setlist_items : "show_id (FK, ON DELETE CASCADE)"
+
     shows {
-        INTEGER id PK
-        TEXT name
-        TEXT venue
-        TEXT show_date
-        INTEGER max_minutes "more than 0"
+        INT id PK
+        NVARCHAR(200) name
+        NVARCHAR(200) venue
+        DATE show_date
+        INT max_minutes "more than 0"
+        NVARCHAR(10) status "planned, confirmed or cancelled; default planned (002)"
     }
 
     setlist_items {
-        INTEGER id PK
-        INTEGER show_id FK
-        INTEGER position "unique together with show_id"
-        TEXT item_type "song or break"
-        INTEGER song_id "ID only, no FK, empty for a break"
-        TEXT break_label
-        INTEGER break_seconds
+        INT id PK
+        INT show_id FK
+        INT position "unique with show_id"
+        NVARCHAR(10) item_type "song or break"
+        INT song_id "catalogue song ID, no FK; empty for a break"
+        NVARCHAR(100) break_label
+        INT break_seconds
+    }
+
+    schema_migrations {
+        NVARCHAR(100) version PK "001_init, 002_add_show_status"
+        DATETIME2 applied_at
     }
 ```

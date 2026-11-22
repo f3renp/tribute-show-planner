@@ -47,7 +47,22 @@ services:
     volumes:
       - ./db:/db:ro
     # -b: stop with a non-zero exit code on the first SQL error.
-    entrypoint: ["/opt/mssql-tools18/bin/sqlcmd", "-S", "sqlserver", "-U", "sa", "-C", "-b", "-i", "/db/init.sql"]
+    # Up to 6 attempts, 5 s apart. After a restart with data in the volume,
+    # sa can log in (so the healthcheck passes) a few seconds before SQL
+    # Server has finished starting the databases, and touching one then
+    # fails with Msg 904 ("cannot be autostarted during server shutdown or
+    # startup"). init.sql is idempotent, so running it again is safe.
+    # $$ stops compose from filling in $attempt; bash reads it.
+    entrypoint:
+      - /bin/bash
+      - -c
+      - >-
+        for attempt in 1 2 3 4 5 6; do
+        /opt/mssql-tools18/bin/sqlcmd -S sqlserver -U sa -C -b -i /db/init.sql && exit 0;
+        echo "db-init: attempt $$attempt failed, trying again in 5 s";
+        sleep 5;
+        done;
+        exit 1
     restart: "no"
 
   catalogue:
