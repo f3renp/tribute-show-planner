@@ -546,8 +546,10 @@ Notes:
   `style.css`, `config.js` (the service URLs) and `js/`: `api.js` (calls
   with a 60 s timeout and the error messages, shared by every page), one
   script per page, and `shouts.js` (the click shouts).
-- `docs/diagrams.md`: architecture and database diagrams (still show the
-  single-app version).
+- `docs/diagrams.md`: Mermaid diagrams: the architecture before (the
+  Assignment 1 monolith) and after (two services, one database each), the
+  deployment to Azure, and one database diagram per service matching the
+  migrations.
 - `.github/workflows/ci.yml`, `cd.yml`: the pipeline (see How deployment
   works).
 - `ADR.md`: architecture decisions. `AI_USAGE.md`: AI usage log.
