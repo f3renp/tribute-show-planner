@@ -47,12 +47,32 @@ def test_empty_show_form_reports_every_problem_at_once():
         ("max_minutes", "0"),
         ("max_minutes", "241"),
         ("max_minutes", "ninety"),
+        ("status", "sold out"),
+        # The check is exact: the UI always sends the lowercase value.
+        ("status", "Confirmed"),
     ],
 )
 def test_one_bad_show_field_gives_exactly_one_error(field, value):
     form = dict(valid_show_form(), **{field: value})
     show, errors = service.validate_show(form)
     assert len(errors) == 1
+
+
+@pytest.mark.parametrize("form_status", [None, "", "  "])
+def test_a_missing_or_empty_status_means_planned(form_status):
+    form = valid_show_form()
+    if form_status is not None:
+        form["status"] = form_status
+    show, errors = service.validate_show(form)
+    assert errors == []
+    assert show["status"] == "planned"
+
+
+@pytest.mark.parametrize("status", ["planned", "confirmed", "cancelled"])
+def test_every_status_is_accepted(status):
+    show, errors = service.validate_show(dict(valid_show_form(), status=status))
+    assert errors == []
+    assert show["status"] == status
 
 
 def test_valid_break():

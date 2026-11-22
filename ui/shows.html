@@ -28,7 +28,7 @@
     <p id="no-shows" hidden>No shows yet.</p>
     <table id="shows" hidden>
       <thead>
-        <tr><th>Name</th><th>Venue</th><th>Date</th><th>Length (minutes)</th></tr>
+        <tr><th>Name</th><th>Venue</th><th>Date</th><th>Length (minutes)</th><th>Status</th></tr>
       </thead>
       <tbody></tbody>
     </table>
@@ -40,6 +40,13 @@
       <label>Venue <input name="venue"></label>
       <label>Date <input type="date" name="show_date"></label>
       <label>Length (minutes) <input name="max_minutes"></label>
+      <label>Status
+        <select name="status">
+          <option value="planned">Planned</option>
+          <option value="confirmed">Confirmed</option>
+          <option value="cancelled">Cancelled</option>
+        </select>
+      </label>
       <button>Create show</button>
     </form>
   </main>

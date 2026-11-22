@@ -38,6 +38,13 @@
           <label>Venue <input name="venue"></label>
           <label>Date <input type="date" name="show_date"></label>
           <label>Length (minutes) <input name="max_minutes"></label>
+          <label>Status
+            <select name="status">
+              <option value="planned">Planned</option>
+              <option value="confirmed">Confirmed</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
+          </label>
           <div class="form-buttons">
             <button>Save</button>
             <button id="delete-show" type="button">Delete show</button>

@@ -24,9 +24,9 @@ def insert_show(show):
     # OUTPUT INSERTED.id returns the id SQL Server gave the new row.
     return db.insert(
         """
-        INSERT INTO shows (name, venue, show_date, max_minutes)
+        INSERT INTO shows (name, venue, show_date, max_minutes, status)
         OUTPUT INSERTED.id
-        VALUES (%(name)s, %(venue)s, %(show_date)s, %(max_minutes)s)
+        VALUES (%(name)s, %(venue)s, %(show_date)s, %(max_minutes)s, %(status)s)
         """,
         show,
     )
@@ -38,7 +38,7 @@ def update_show(show_id, show):
         """
         UPDATE shows
         SET name = %(name)s, venue = %(venue)s, show_date = %(show_date)s,
-            max_minutes = %(max_minutes)s
+            max_minutes = %(max_minutes)s, status = %(status)s
         WHERE id = %(id)s
         """,
         dict(show, id=show_id),

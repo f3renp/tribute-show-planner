@@ -68,7 +68,7 @@ def save_show_with_song_7_and_a_break():
     (for the tests where it is down). Return the show id."""
     show_id = repository.insert_show(
         {"name": "Halloween night", "venue": "Teatro Real",
-         "show_date": "2026-10-31", "max_minutes": 90}
+         "show_date": "2026-10-31", "max_minutes": 90, "status": "planned"}
     )
     repository.insert_song_item(show_id, 1, 7)
     repository.insert_break_item(show_id, 2, "Rest", 60)
@@ -97,6 +97,26 @@ def test_create_show_returns_201_and_the_show(client):
     assert show["name"] == "Halloween night"
     assert show["show_date"] == "2026-10-31"
     assert show["max_minutes"] == 90
+
+
+def test_a_show_created_without_a_status_is_planned(client):
+    response = client.post("/api/shows", json=show_body())
+    assert response.get_json()["status"] == "planned"
+
+
+def test_create_show_with_a_status_saves_it(client):
+    response = client.post("/api/shows", json=show_body(status="confirmed"))
+    assert response.status_code == 201
+    assert response.get_json()["status"] == "confirmed"
+
+
+def test_create_show_with_an_unknown_status_is_400_and_saves_nothing(client):
+    response = client.post("/api/shows", json=show_body(status="sold out"))
+    assert response.status_code == 400
+    assert response.get_json() == {
+        "errors": ["Status must be planned, confirmed or cancelled."]
+    }
+    assert repository.list_shows() == []
 
 
 def test_create_show_with_no_fields_lists_every_error_at_once(client):
@@ -197,6 +217,16 @@ def test_update_show_answers_with_the_new_overview(client, catalogue):
     assert overview["problems"] == [
         "Running time is 4:54, 0:54 over the 4-minute limit."
     ]
+
+
+def test_cancelling_a_show_keeps_its_setlist(client, catalogue):
+    show_id = create_show(client, status="confirmed")
+    song_id = add_catalogue_song(catalogue, "Billie Jean")
+    client.post(f"/api/shows/{show_id}/songs", json={"song_id": song_id})
+    response = client.put(f"/api/shows/{show_id}", json=show_body(status="cancelled"))
+    overview = response.get_json()
+    assert overview["show"]["status"] == "cancelled"
+    assert [item["song_id"] for item in overview["items"]] == [song_id]
 
 
 def test_a_show_read_from_the_api_can_be_sent_back_unchanged(client, catalogue):

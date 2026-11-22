@@ -293,13 +293,17 @@ components:
 
     Show:
       type: object
-      required: [id, name, venue, show_date, max_minutes]
+      required: [id, name, venue, show_date, max_minutes, status]
       properties:
         id: { type: integer }
         name: { type: string }
         venue: { type: string }
         show_date: { type: string, format: date, example: "2026-10-31" }
         max_minutes: { type: integer, minimum: 1, maximum: 240 }
+        status:
+          type: string
+          enum: [planned, confirmed, cancelled]
+          description: Added by migration 002. Shows that existed before it are planned.
 
     ShowInput:
       type: object
@@ -309,6 +313,13 @@ components:
         venue: { type: string, maxLength: 200 }
         show_date: { type: string, description: YYYY-MM-DD., example: "2026-10-31" }
         max_minutes: { type: [integer, string], description: 1 to 240., example: 90 }
+        status:
+          type: string
+          enum: [planned, confirmed, cancelled, ""]
+          default: planned
+          description: >-
+            Optional. Missing or empty means planned, also on PUT, which
+            replaces every field.
 
     SongChoice:
       type: object
