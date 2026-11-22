@@ -6,9 +6,10 @@ is wrong with that order: running time over the limit, outfit changes
 without a long enough break, poor energy pacing, and retired or repeated
 songs.
 
-**Live:** https://fmedinaieu2024ui.z1.web.core.windows.net (Azure; the
-first page after a quiet hour can take a minute while the services and
-their databases wake up).
+**Live:** https://fmedinaieu2024ui.z1.web.core.windows.net (Azure). The
+first page after the app has been idle can take 30-50 s while a service
+and its database wake up; sometimes the page says the service may be
+starting up, and Try again then loads it (measured on 22 Nov, ADR-8).
 
 It runs as a static UI (`ui/`: HTML, CSS and plain JavaScript, no build
 step) that calls two services from the browser. Each service is a Flask
@@ -17,9 +18,10 @@ app served by waitress with its own SQL Server database (ADR-6, ADR-7 in
 
 - **Catalogue** (`services/catalogue/`): songs and outfits, as a JSON API
   at http://localhost:8001/api/. Owns the `outfits` and `songs` tables.
-- **Shows** (`services/shows/`): shows, ordered setlists and the setlist
-  checks (`shows/rules.py`), as a JSON API at http://localhost:8002/api/.
-  Owns the `shows` and `setlist_items` tables.
+- **Shows** (`services/shows/`): shows (each planned, confirmed or
+  cancelled), ordered setlists and the setlist checks (`shows/rules.py`),
+  as a JSON API at http://localhost:8002/api/. Owns the `shows` and
+  `setlist_items` tables.
 
 The shows service gets song details only from the catalogue's JSON API,
 over HTTP:
@@ -28,7 +30,7 @@ over HTTP:
 |----------|---------|
 | `GET /api/songs?ids=3,7` | The songs with these ids (unknown ids are left out) |
 | `GET /api/songs/active` | The songs that can be added to a setlist |
-| `GET /health` (both services) | `{"status": "ok"}` |
+| `GET /health` (both services) | 200 `{"status": "ok", "db": "ok", "version": "<git sha>"}` when the service can read and write its own database, 503 otherwise |
 
 The rest of the catalogue API is for the browser. Errors are
 `{"errors": ["message", ...]}`: 400 for invalid values (every field error
@@ -58,9 +60,9 @@ If the catalogue is down, the overview is still 200, with
 | Endpoint | Returns |
 |----------|---------|
 | `GET /api/shows` | Every show, soonest first |
-| `POST /api/shows` | 201 and the new show, or 400 |
+| `POST /api/shows` | 201 and the new show, or 400. `status` is optional: `planned` (the default), `confirmed` or `cancelled` |
 | `GET /api/shows/{id}` | The overview, or 404 |
-| `PUT /api/shows/{id}` | The new overview, 400 or 404 |
+| `PUT /api/shows/{id}` | The new overview, 400 or 404. It replaces every field, so a missing `status` means `planned` |
 | `DELETE /api/shows/{id}` | 204 (its setlist is deleted too) or 404 |
 | `POST /api/shows/{id}/songs` | 201 and the overview, 400, 404, or 503 if the catalogue is down |
 | `POST /api/shows/{id}/breaks` | 201 and the overview, 400 or 404 |
@@ -79,15 +81,35 @@ Then open **http://localhost:8080** (the UI, served by a stock
 `nginx:1.27-alpine` with `ui/` mounted read-only). Use `localhost`, not
 `127.0.0.1`: the services only accept browser calls from the origin
 `http://localhost:8080`. The JSON APIs are at http://localhost:8001/api/
-(catalogue) and http://localhost:8002/api/ (shows). Stop with Ctrl+C. `docker compose down` removes the containers;
+(catalogue) and http://localhost:8002/api/ (shows). Stop with Ctrl+C.
+`docker compose down` removes the containers;
 the data stays in the `sqlserver-data` volume until you run
 `docker compose down -v`.
 
 There is no other setup step and no `.env` file is needed. Compose starts
 SQL Server, `db-init` runs `db/init.sql` (databases and logins), then each
-service applies its pending migrations (`services/<name>/migrations/`). If the catalogue is empty,
-it also adds a demo catalogue (`seed.py`): 7 outfits and 20 songs, with one
-song already retired. A catalogue that already has data is never changed.
+service applies its pending migrations (see Migrations below). If the
+catalogue is empty, it also adds a demo catalogue (`seed.py`): 7 outfits
+and 20 songs, with one song already retired. A catalogue that already has
+data is never changed.
+
+### Migrations
+
+Each service's schema is a numbered list of SQL files in
+`services/<name>/migrations/`, applied in order by `app/migrate.py` when
+the service starts. Each file runs once, in one transaction with its row
+in the `schema_migrations` table, so a second start applies nothing and a
+failed file leaves nothing half applied. An applied file is never edited;
+a change is a new file (ADR-7).
+
+| Service | Migration | What it does |
+|---------|-----------|--------------|
+| catalogue | `001_init.sql` | The `outfits` and `songs` tables |
+| shows | `001_init.sql` | The `shows` and `setlist_items` tables |
+| shows | `002_add_show_status.sql` | Adds `status` (`planned`, `confirmed`, `cancelled`) to `shows`, which already holds data: `NOT NULL` with the default `planned`, so every existing show becomes planned and keeps every value, and the previous image keeps working during a deploy |
+
+Each start logs either `migration applied: <file>` for each new file or
+`migrations: database is up to date`.
 
 ### Without Docker (for development)
 
@@ -184,12 +206,18 @@ ruff check .
 python -m pytest --cov --cov-report=term-missing --cov-fail-under=70
 ```
 
-Result on 2026-11-19:
+Result on 2026-11-22:
 
 | Service | Tests | Coverage | Time (laptop) |
 |---------|-------|----------|---------------|
-| catalogue | 168 passed | 99% | ~60 s |
-| shows | 171 passed | 99% | ~32 s |
+| catalogue | 168 passed | 99.40% | ~55 s |
+| shows | 186 passed | 99.31% | ~35 s |
+
+`services/shows/tests/test_migrate.py` also tests the real migration 002
+the way it ran on Azure: it applies only `001_init.sql`, saves a show
+with three songs and a break, applies `002_add_show_status.sql`, and
+checks that every row is still there with the same values and the show
+is `planned`.
 
 ### Cross-seam integration test
 
@@ -210,8 +238,9 @@ pip install -r tests/integration/requirements.txt
 python -m pytest tests/integration -v
 ```
 
-Result on 2026-11-19: 2 passed in 19 s. With the catalogue stopped, the
-degraded overview took 3-4 s, mostly the failed name lookup of `catalogue`.
+Result on 2026-11-22: 2 passed in 20 s. When I measured it on 2026-11-19,
+the degraded overview with the catalogue stopped took 3-4 s, mostly the
+failed name lookup of `catalogue`.
 
 Since the pages became JSON APIs (18 Nov), each service's `tests/test_api.py`
 tests every endpoint and status code through Flask's test client, so
@@ -401,8 +430,30 @@ Changes reach `main` only through pull requests. Two workflows in
 Each service applies its pending migrations when it starts, with at most
 one replica, so they never run twice at the same time. The first request
 after an idle period starts a container and may find its database paused;
-the services retry the connection for about a minute (`db.py`), and the
-UI tells the user to try again if a service takes longer than 60 s.
+the services retry the connection for about a minute (`db.py`). If the
+container is not ready yet, Azure's ingress answers 503 after about 30 s,
+and the UI then says the service may be starting up and offers Try again;
+its 60 s timeout is only for a request that gets no answer at all (ADR-8).
+
+### Pipeline runs
+
+| CD run | Commit | Result |
+|--------|--------|--------|
+| [#1](https://github.com/f3renp/tribute-show-planner/actions/runs/44765115676) | `91564a2` | Failed: `ExpressRevisionSuffixNotSupported`, our express environment rejects `--revision-suffix`. Fixed in `d3ebb89`. |
+| [#2](https://github.com/f3renp/tribute-show-planner/actions/runs/44767078377) | `f18ee42` | Failed: in an express environment every revision is named `<app>--latest` and revision restart is not supported. Fixed in `c0a01c8` (compare images, stop/start on a re-run). |
+| [#3](https://github.com/f3renp/tribute-show-planner/actions/runs/44768707244) | `d998c0a` | Success: the first deploy of both services and the UI. |
+| [#4](https://github.com/f3renp/tribute-show-planner/actions/runs/45040502241) | `e6c8bc2` | Success: deployed migration 002 (evidence below). |
+
+### Migration evidence on Azure (22 Nov)
+
+- Before (image `d998c0a`): `GET /api/shows` returned show 1, "christmas
+  night", with no `status` field; its overview had 4 items (3 songs and a
+  break).
+- CD run #4 deployed image `e6c8bc2`. The shows log
+  (`az containerapp logs show`) has `migration applied:
+  002_add_show_status.sql` at 2026-11-22T15:53:23Z.
+- After (image `e6c8bc2`): the same show 1, with the same values, now
+  `"status": "planned"`, and the same 4 items.
 
 ## Code copied between the services
 
